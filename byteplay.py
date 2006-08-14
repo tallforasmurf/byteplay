@@ -1,8 +1,28 @@
+# byteplay - Python bytecode assembler/disassembler.
+# Copyright (C) 2006 Noam Raphael
+# Homepage: http://code.google.com/p/byteplay
+# 
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
 __all__ = ['opmap', 'opname', 'opcodes',
            'cmp_op', 'hasarg', 'hasname', 'hasjrel', 'hasjabs',
            'hasjump', 'haslocal', 'hascompare', 'hasfree', 'hascode',
-           'hasse', 'getse',
-           'SetLineno', 'Label', 'isopcode', 'Code']
+           'hasflow', 'getse',
+           'Opcode', 'SetLineno', 'Label', 'isopcode', 'Code',
+           'CodeList', 'printcodelist']
 
 import opcode
 from dis import findlabels
@@ -12,6 +32,7 @@ import operator
 import itertools
 import sys
 import warnings
+from cStringIO import StringIO
 
 
 ######################################################################
@@ -25,9 +46,18 @@ class Opcode(int):
     """An int which represents an opcode - has a nicer repr."""
     def __repr__(self):
         return opname[self]
+    __str__ = __repr__
+
+class CodeList(list):
+    """A list for storing opcode tuples - has a nicer __str__."""
+    def __str__(self):
+        f = StringIO()
+        printcodelist(self, f)
+        return f.getvalue()
 
 opmap = dict((name.replace('+', '_'), Opcode(code))
-             for name, code in opcode.opmap.iteritems())
+             for name, code in opcode.opmap.iteritems()
+             if name != 'EXTENDED_ARG')
 opname = dict((code, name) for name, code in opmap.iteritems())
 opcodes = set(opname)
 
@@ -111,10 +141,11 @@ _se = dict((op, getattr(_se, opname[op]))
            for op in opcodes
            if hasattr(_se, opname[op]))
 
-hasse = set(_se).union(set([CALL_FUNCTION, CALL_FUNCTION_VAR, CALL_FUNCTION_KW,
-                            CALL_FUNCTION_VAR_KW, BUILD_TUPLE, BUILD_LIST,
-                            UNPACK_SEQUENCE, BUILD_SLICE, DUP_TOPX,
-                            RAISE_VARARGS, MAKE_FUNCTION]))
+hasflow = opcodes - set(_se) - \
+          set([CALL_FUNCTION, CALL_FUNCTION_VAR, CALL_FUNCTION_KW,
+               CALL_FUNCTION_VAR_KW, BUILD_TUPLE, BUILD_LIST,
+               UNPACK_SEQUENCE, BUILD_SLICE, DUP_TOPX,
+               RAISE_VARARGS, MAKE_FUNCTION, MAKE_CLOSURE])
 
 def getse(op, arg=None):
     """Get the stack effect of an opcode, as a (pop, push) tuple.
@@ -123,9 +154,6 @@ def getse(op, arg=None):
     If op isn't a simple opcode, that is, the flow doesn't always continue
     to the next opcode, a ValueError is raised.
     """
-    if op not in hasse:
-        raise ValueError, "Opcode doesn't have a simple stack effect"
-    
     try:
         return _se[op]
     except KeyError:
@@ -164,8 +192,14 @@ def getse(op, arg=None):
         return 1+arg, 1
     elif op == MAKE_FUNCTION:
         return 1+arg, 1
+    elif op == MAKE_CLOSURE:
+        if python_version == '2.4':
+            raise ValueError, "The stack effect of MAKE_CLOSURE depends on TOS"
+        else:
+            return 2+arg, 1
     else:
-        assert False, "Unhandled opcode"
+        raise ValueError, "The opcode %r isn't recognized or has a special "\
+              "flow control" % op
 
 class SetLinenoType(object):
     def __repr__(self):
@@ -225,6 +259,8 @@ class Code(object):
 
     code is a list of 2-tuples. The first item is an opcode, or SetLineno, or a
     Label instance. The second item is the argument, if applicable, or None.
+    code can be a CodeList instance, which will produce nicer output when
+    being printed.
     """
     def __init__(self, code, freevars, args, varargs, varkwargs, newlocals,
                  name, filename, firstlineno, docstring):
@@ -269,7 +305,7 @@ class Code(object):
         linestarts = dict(cls._findlinestarts(co))
         cellfree = co.co_cellvars + co.co_freevars
 
-        code = []
+        code = CodeList()
         n = len(co_code)
         i = 0
         extended_arg = 0
@@ -292,7 +328,7 @@ class Code(object):
                 arg = ord(co_code[i]) + ord(co_code[i+1])*256 + extended_arg
                 extended_arg = 0
                 i += 2
-                if op == EXTENDED_ARG:
+                if op == opcode.EXTENDED_ARG:
                     extended_arg = arg << 16
                 elif op in hasconst:
                     code.append((op, co.co_consts[arg]))
@@ -393,14 +429,19 @@ class Code(object):
                          if isinstance(op, Label))
 
         # sf_targets are the targets of SETUP_FINALLY opcodes. They are recorded
-        # because we do not wish to follow the direct track to "finally" blocks,
-        # since the stack size of it varies according to the route: If an
-        # exception was raised, 3 objects are pushed. On return or continue,
-        # 2 objects are pushed, and if nothing happened, 1 object is pushed by
-        # a (LOAD_CONST, None) opcode.
-        # Our solution is to always assume that END_FINALLY pops 3 objects, and
-        # to reach it only through the SETUP_FINALLY jump, which really pushes
-        # 3 objects.
+        # because they have special stack behaviour. If an exception was raised
+        # in the block pushed by a SETUP_FINALLY opcode, the block is popped
+        # and 3 objects are pushed. On return or continue, the block is popped
+        # and 2 objects are pushed. If nothing happened, the block is popped by
+        # a POP_BLOCK opcode and 1 object is pushed by a (LOAD_CONST, None)
+        # operation.
+        #
+        # Our solution is to record the stack state of SETUP_FINALLY targets
+        # as having 3 objects pushed, which is the maximum. However, to make
+        # stack recording consistent, the get_next_stacks function will always
+        # yield the stack state of the target as if 1 object was pushed, but
+        # this will be corrected in the actual stack recording.
+
         sf_targets = set(label_pos[arg]
                          for op, arg in code
                          if op == SETUP_FINALLY)
@@ -420,9 +461,11 @@ class Code(object):
             """
             op, arg = code[pos]
 
-            if isinstance(op, Label) or True:
+            if isinstance(op, Label):
                 # We should check if we already reached a node only if it is
                 # a label.
+                if pos in sf_targets:
+                    curstack = curstack[:-1] + (curstack[-1] + 2,)
                 if stacks[pos] is None:
                     stacks[pos] = curstack
                 else:
@@ -439,45 +482,40 @@ class Code(object):
 
             if not isopcode(op):
                 # label or SetLineno - just continue to next line
-                if pos+1 not in sf_targets:
-                    yield pos+1, curstack
+                yield pos+1, curstack
 
             elif op in (STOP_CODE, RETURN_VALUE, RAISE_VARARGS):
                 # No place in particular to continue to
                 pass
 
-            elif op in hasse:
+            elif op == MAKE_CLOSURE and python_version == '2.4':
+                # This is only relevant in Python 2.4 - in Python 2.5 the stack
+                # effect of MAKE_CLOSURE can be calculated from the arg.
+                # In Python 2.4, it depends on the number of freevars of TOS,
+                # which should be a code object.
+                if pos == 0:
+                    raise ValueError, \
+                          "MAKE_CLOSURE can't be the first opcode"
+                lastop, lastarg = code[pos-1]
+                if lastop != LOAD_CONST:
+                    raise ValueError, \
+                          "MAKE_CLOSURE should come after a LOAD_CONST op"
+                try:
+                    nextrapops = len(lastarg.freevars)
+                except AttributeError:
+                    try:
+                        nextrapops = len(lastarg.co_freevars)
+                    except AttributeError:
+                        raise ValueError, \
+                              "MAKE_CLOSURE preceding const should "\
+                              "be a code or a Code object"
+
+                yield pos+1, newstack(-arg-nextrapops)
+
+            elif op not in hasflow:
                 # Simple change of stack
                 pop, push = getse(op, arg)
-                if pos+1 not in sf_targets:
-                    yield pos+1, newstack(push - pop)
-
-            elif op == MAKE_CLOSURE:
-                if python_version == '2.4':
-                    # MAKE_CLOSURE takes cells according to TOS, which should be
-                    # a code object. If the previous op is LOAD_CONST, we can
-                    # handle this.
-                    if pos == 0:
-                        raise ValueError, \
-                              "MAKE_CLOSURE can't be the first opcode"
-                    lastop, lastarg = code[pos-1]
-                    if lastop != LOAD_CONST:
-                        raise ValueError, \
-                              "MAKE_CLOSURE should come after a LOAD_CONST op"
-                    try:
-                        nextrapops = len(lastarg.freevars)
-                    except AttributeError:
-                        try:
-                            nextrapops = len(lastarg.co_freevars)
-                        except AttributeError:
-                            raise ValueError, \
-                                  "MAKE_CLOSURE preceding const should "\
-                                  "be a code or a Code object"
-                else:
-                    # In Python 2.5 the free vars are taken from a tuple
-                    nextrapops = 1
-                if pos+1 not in sf_targets:
-                    yield pos+1, newstack(-arg-nextrapops)
+                yield pos+1, newstack(push - pop)
 
             elif op in (JUMP_FORWARD, JUMP_ABSOLUTE):
                 # One possibility for a jump
@@ -486,15 +524,13 @@ class Code(object):
             elif op in (JUMP_IF_FALSE, JUMP_IF_TRUE):
                 # Two possibilities for a jump
                 yield label_pos[arg], curstack
-                if pos+1 not in sf_targets:
-                    yield pos+1, curstack
+                yield pos+1, curstack
 
             elif op == FOR_ITER:
                 # FOR_ITER pushes next(TOS) on success, and pops TOS and jumps
                 # on failure
                 yield label_pos[arg], newstack(-1)
-                if pos+1 not in sf_targets:
-                    yield pos+1, newstack(1)
+                yield pos+1, newstack(1)
 
             elif op == BREAK_LOOP:
                 # BREAK_LOOP jumps to a place specified on block creation, so
@@ -524,25 +560,26 @@ class Code(object):
             elif op == SETUP_FINALLY:
                 # We continue with a new block.
                 # On exception, we jump to the label with 3 extra objects on
-                # stack
+                # stack, but to keep stack recording consistent, we behave as
+                # if we add only 1 object. Extra 2 will be added to the actual
+                # recording.
                 yield pos+1, curstack + (0,)
-                yield label_pos[arg], newstack(3)
+                yield label_pos[arg], newstack(1)
 
             elif op == POP_BLOCK:
                 # Just pop the block
-                if pos+1 not in sf_targets:
-                    yield pos+1, curstack[:-1]
+                yield pos+1, curstack[:-1]
 
             elif op == END_FINALLY:
-                # Since we reach here only by "exception route", we pop 3
-                # objects.
+                # Since stack recording of SETUP_FINALLY targets is of 3 pushed
+                # objects (as when an exception is raised), we pop 3 objects.
                 yield pos+1, newstack(-3)
 
             elif op == WITH_CLEANUP:
-                # Since we don't follow the direct route to SETUP_FINALLY
-                # target, and WITH_CLEANUP is always encountered on that route,
-                # we can simply pop 1 object and let END_FINALLY pop the
-                # remaining 3.
+                # Since WITH_CLEANUP is always found after SETUP_FINALLY
+                # targets, and the stack recording is that of a raised
+                # exception, we can simply pop 1 object and let END_FINALLY
+                # pop the remaining 3.
                 yield pos+1, newstack(-1)
 
             else:
@@ -639,6 +676,9 @@ class Code(object):
                         co_lnotab.append(incr_pos)
                         co_lnotab.append(incr_lineno)
 
+            elif op == opcode.EXTENDED_ARG:
+                raise ValueError, "EXTENDED_ARG not supported in Code objects"
+
             elif not op in hasarg:
                 co_code.append(op)
 
@@ -669,7 +709,7 @@ class Code(object):
                     pass
 
                 if arg > 0xFFFF:
-                    co_code.append(EXTENDED_ARG)
+                    co_code.append(opcode.EXTENDED_ARG)
                     co_code.append((arg >> 16) & 0xFF)
                     co_code.append((arg >> 24) & 0xFF)
                 co_code.append(op)
@@ -700,6 +740,63 @@ class Code(object):
                         co_freevars, co_cellvars)
 
                 
+def printcodelist(codelist, to=sys.stdout):
+    """Get a code list. Print it nicely."""
+
+    labeldict = {}
+    pendinglabels = []
+    for i, (op, arg) in enumerate(codelist):
+        if isinstance(op, Label):
+            pendinglabels.append(op)
+        elif op is SetLineno:
+            pass
+        else:
+            while pendinglabels:
+                labeldict[pendinglabels.pop()] = i
+
+    lineno = None
+    islabel = False
+    for i, (op, arg) in enumerate(codelist):
+        if op is SetLineno:
+            lineno = arg
+            print >> to
+            continue
+
+        if isinstance(op, Label):
+            islabel = True
+            continue
+
+        if lineno is None:
+            linenostr = ''
+        else:
+            linenostr = str(lineno)
+            lineno = None
+
+        if islabel:
+            islabelstr = '>>'
+            islabel = False
+        else:
+            islabelstr = ''
+
+        if op in hasconst:
+            argstr = repr(arg)
+        elif op in hasjump:
+            try:
+                argstr = 'to ' + str(labeldict[arg])
+            except KeyError:
+                argstr = repr(arg)
+        elif op in hasarg:
+            argstr = str(arg)
+        else:
+            argstr = ''
+
+        print >> to, '%3s     %2s %4d %-20s %s' % (
+            linenostr,
+            islabelstr,
+            i,
+            op,
+            argstr)
+
 def install():
     """Install byteplay to automatically reassemble all functions when a module
     is imported.
@@ -714,26 +811,6 @@ def install():
     orig_importer = __builtin__.__import__
     reassembled_ids = set()
 
-    def reassemble_code(code):
-        """Get a code. Return a recursively-reassembled code."""
-        try:
-            c = Code.from_code(code)
-            assert Code.from_code(c.to_code()) == c
-            reassembled = {}
-            for i, (op, arg) in enumerate(c.code):
-                if isopcode(op) and op in hasconst:
-                    if isinstance(arg, new.code):
-                        try:
-                            newcode = reassembled[id(arg)]
-                        except KeyError:
-                            newcode = reassemble_code(arg)
-                            reassembled[id(arg)] = newcode
-                        c.code[i] = (op, newcode)
-            return c.to_code()
-        except:
-            print >> sys.stderr, "In code %s" % code
-            raise
-
     def reassemble_all_funcs():
         """Reassemble all function objects not reassembled before.
 
@@ -744,7 +821,6 @@ def install():
         funcs = [x for x in gc.get_objects()
                  if isinstance(x, new.function)
                  and id(x) not in reassembled_ids
-                 #and x.func_globals is not globals()
                  ]
         for f in funcs:
             f.func_code = Code.from_code(f.func_code).to_code()
