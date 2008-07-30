@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from setuptools import setup, find_packages
 from byteplay import __version__ as lib_version
 

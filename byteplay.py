@@ -16,6 +16,8 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+__version__ = '0.1'
+
 __all__ = ['opmap', 'opname', 'opcodes',
            'cmp_op', 'hasarg', 'hasname', 'hasjrel', 'hasjabs',
            'hasjump', 'haslocal', 'hascompare', 'hasfree', 'hascode',
@@ -32,7 +34,6 @@ import itertools
 import sys
 import warnings
 from cStringIO import StringIO
-
 
 ######################################################################
 # Define opcodes and information about them
