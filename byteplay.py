@@ -132,9 +132,13 @@ class _se:
     if python_version == '2.4':
         YIELD_VALUE = 1,0
         IMPORT_NAME = 1,1
+    elif python_version == '2.6':
+    	STORE_MAP = 2,0
     else:
         YIELD_VALUE = 1,1
         IMPORT_NAME = 2,1
+
+	
 
 
 _se = dict((op, getattr(_se, opname[op]))
