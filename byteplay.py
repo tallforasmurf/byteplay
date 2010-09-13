@@ -801,59 +801,85 @@ def printcodelist(codelist, to=sys.stdout):
             op,
             argstr)
 
-def install():
-    """Install byteplay to automatically reassemble all functions when a module
-    is imported.
+def recompile(filename):
+    """Create a .pyc by disassembling the file and assembling it again, printing
+    a message that the reassembled file was loaded."""
+    # Most of the code here based on the compile.py module.
+    import os
+    import imp
+    import marshal
+    import struct
+    
+    f = open(filename, 'U')
+    try:
+        timestamp = long(os.fstat(f.fileno()).st_mtime)
+    except AttributeError:
+        timestamp = long(os.stat(filename).st_mtime)
+    codestring = f.read()
+    f.close()
+    if codestring and codestring[-1] != '\n':
+        codestring = codestring + '\n'
+    try:
+        codeobject = compile(codestring, filename, 'exec')
+    except SyntaxError:
+        print >> sys.stderr, "Skipping %s - syntax error." % filename
+        return
+    cod = Code.from_code(codeobject)
+    message = "reassembled %r imported.\n" % filename
+    cod.code[:0] = [ # __import__('sys').stderr.write(message)
+        (LOAD_GLOBAL, '__import__'),
+        (LOAD_CONST, 'sys'),
+        (CALL_FUNCTION, 1),
+        (LOAD_ATTR, 'stderr'),
+        (LOAD_ATTR, 'write'),
+        (LOAD_CONST, message),
+        (CALL_FUNCTION, 1),
+        (POP_TOP, None),
+        ]
+    codeobject2 = cod.to_code()
+    fc = open(filename+'c', 'wb')
+    fc.write('\0\0\0\0')
+    fc.write(struct.pack('<l', timestamp))
+    marshal.dump(codeobject2, fc)
+    fc.flush()
+    fc.seek(0, 0)
+    fc.write(imp.get_magic())
+    fc.close()
 
-    This is useful for testing.
-    """
-    import gc
-    import __builtin__
-    import sys
-    import atexit
+def recompile_all(path):
+    """recursively recompile all .py files in the directory"""
+    import os
+    if os.path.isdir(path):
+        for root, dirs, files in os.walk(path):
+            for name in files:
+                if name.endswith('.py'):
+                    filename = os.path.abspath(os.path.join(root, name))
+                    print >> sys.stderr, filename
+                    recompile(filename)
+    else:
+        filename = os.path.abspath(path)
+        recompile(filename)
 
-    orig_importer = __builtin__.__import__
-    reassembled_ids = set()
+def main():
+    import os
+    if len(sys.argv) != 2 or not os.path.exists(sys.argv[1]):
+        print """\
+Usage: %s dir
 
-    def reassemble_all_funcs():
-        """Reassemble all function objects not reassembled before.
+Search recursively for *.py in the given directory, disassemble and assemble
+them, adding a note when each file is imported.
 
-        We store ids of already reassembled functions, so a function won't
-        be reassembled if another function with the same id was already
-        reassembled.
-        """
-        funcs = [x for x in gc.get_objects()
-                 if isinstance(x, new.function)
-                 and id(x) not in reassembled_ids
-                 ]
-        for f in funcs:
-            f.func_code = Code.from_code(f.func_code).to_code()
-            reassembled_ids.add(id(f))
+Use it to test byteplay like this:
+> byteplay.py Lib
+> make test
 
-    def patched_importer(*args, **kwargs):
-        prevlen = len(sys.modules)
-        r = orig_importer(*args, **kwargs)
-        curlen = len(sys.modules)
-        if curlen > prevlen:
-            reassemble_all_funcs()
-        return r
+Some FutureWarnings may be raised, but that's expected.
 
-    def print_howmany_reassembled():
-        print >> sys.stderr, "Reassembled %d functions." % len(reassembled_ids)
-
-    __builtin__.__import__ = patched_importer
-    atexit.register(print_howmany_reassembled)
-    reassemble_all_funcs()
-
-# To test byteplay, do this:
-#
-# >>> import byteplay
-# >>> byteplay.install()
-# >>> from test.regrtest import main
-# >>> main()
-#
-# It may raise some FutureWarnings, but that's expected.
-# Tip: before doing this, check to see what tests fail even without
-# doing byteplay.install()...
-
-        
+Tip: before doing this, check to see which tests fail even without reassembling
+them...
+""" % sys.argv[0]
+        sys.exit(1)
+    recompile_all(sys.argv[1])
+    
+if __name__ == '__main__':
+    main()
