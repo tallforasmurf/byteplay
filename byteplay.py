@@ -1,7 +1,7 @@
 # byteplay - Python bytecode assembler/disassembler.
 # Copyright (C) 2010 Noam Raphael
 # Homepage: http://code.google.com/p/byteplay
-# 
+#
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
 # License as published by the Free Software Foundation; either
@@ -18,7 +18,7 @@
 
 # Many thanks to Greg X for adding support for Python 2.6 and 2.7!
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 __all__ = ['opmap', 'opname', 'opcodes',
            'cmp_op', 'hasarg', 'hasname', 'hasjrel', 'hasjabs',
@@ -86,7 +86,7 @@ class _se:
     """Quick way of defining static stack effects of opcodes"""
     # Taken from assembler.py by Phillip J. Eby
     NOP       = 0,0
-    
+
     POP_TOP   = 1,0
     ROT_TWO   = 2,2
     ROT_THREE = 3,3
@@ -549,7 +549,7 @@ class Code(object):
                 # Two possibilities for a jump
                 yield label_pos[arg], newstack(-1)
                 yield pos+1, newstack(-1)
-                
+
             elif python_version >= '2.7' and op in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
                 # Two possibilities for a jump
                 yield label_pos[arg], curstack
@@ -605,14 +605,14 @@ class Code(object):
             elif python_version == '2.7' and op == SETUP_WITH:
                 yield label_pos[arg], curstack
                 yield pos+1, newstack(-1) + (1,)
-                
+
             elif op == POP_BLOCK:
                 # Just pop the block
                 yield pos+1, curstack[:-1]
 
             elif op == END_FINALLY:
                 # Since stack recording of SETUP_FINALLY targets is of 3 pushed
-                # objects (as when an exception is raised), we pop 3 objects.               
+                # objects (as when an exception is raised), we pop 3 objects.
                 yield pos+1, newstack(-3)
 
             elif op == WITH_CLEANUP:
@@ -782,7 +782,7 @@ class Code(object):
                               self.filename, self.name, self.firstlineno, co_lnotab,
                               co_freevars, co_cellvars)
 
-                
+
 def printcodelist(codelist, to=sys.stdout):
     """Get a code list. Print it nicely."""
 
@@ -848,7 +848,7 @@ def recompile(filename):
     import imp
     import marshal
     import struct
-    
+
     f = open(filename, 'U')
     try:
         timestamp = long(os.fstat(f.fileno()).st_mtime)
@@ -919,6 +919,6 @@ them...
 """ % sys.argv[0]
         sys.exit(1)
     recompile_all(sys.argv[1])
-    
+
 if __name__ == '__main__':
     main()

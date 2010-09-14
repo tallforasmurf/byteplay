@@ -14,8 +14,8 @@ setup(
        zip_safe = True,
        license='LGPL',
        description='bytecode manipulation library',
-       long_description = """byteplay lets you convert Python code objects into equivalent objects which are easy to play with, and lets you convert those objects back into living Python code objects. It's useful for applying crazy transformations on Python functions, and is also useful in learning Python byte code intricacies. It currently works with Python 2.4 and 2.5.
-       
+       long_description = """byteplay lets you convert Python code objects into equivalent objects which are easy to play with, and lets you convert those objects back into living Python code objects. It's useful for applying crazy transformations on Python functions, and is also useful in learning Python byte code intricacies. It currently works with Python 2.4 and up.
+
 byteplay Module Documentation
 =============================
 
@@ -536,7 +536,7 @@ SETUP_LOOP opcode is executed. This opcode records in a block the number of oper
 currently in stack, and also a position in the code. When the POP_BLOCK is executed, the stack is restored to the recorded state by poping extra items, and the corresponding block is
 discarded. But if the BREAK_LOOP opcode is
 executed instead of POP_BLOCK, one more thing happens. The
-execution jumps to the position specified by the SETUP_LOOP opcode. 
+execution jumps to the position specified by the SETUP_LOOP opcode.
 
 Fortunately, we can still live with that. Instead of defining the stack state
 as a single number - the total number of elements in the stack, we will define
