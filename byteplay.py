@@ -1,5 +1,5 @@
 # byteplay - Python bytecode assembler/disassembler.
-# Copyright (C) 2006 Noam Raphael
+# Copyright (C) 2010 Noam Raphael
 # Homepage: http://code.google.com/p/byteplay
 # 
 # This library is free software; you can redistribute it and/or
@@ -16,6 +16,8 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+# Many thanks to Greg X for adding support for Python 2.6 and 2.7!
+
 __version__ = '0.1'
 
 __all__ = ['opmap', 'opname', 'opcodes',
@@ -27,7 +29,7 @@ __all__ = ['opmap', 'opname', 'opcodes',
 
 import opcode
 from dis import findlabels
-import new
+import types
 from array import array
 import operator
 import itertools
@@ -39,8 +41,8 @@ from cStringIO import StringIO
 # Define opcodes and information about them
 
 python_version = '.'.join(str(x) for x in sys.version_info[:2])
-if python_version not in ('2.4', '2.5'):
-    warnings.warn('byteplay supports only Python versions 2.4 and 2.5')
+if python_version not in ('2.4', '2.5', '2.6', '2.7'):
+    warnings.warn("byteplay doesn't support Python version "+python_version)
 
 class Opcode(int):
     """An int which represents an opcode - has a nicer repr."""
@@ -83,7 +85,7 @@ hascode = set([MAKE_FUNCTION, MAKE_CLOSURE])
 class _se:
     """Quick way of defining static stack effects of opcodes"""
     # Taken from assembler.py by Phillip J. Eby
-    NOP = 0
+    NOP       = 0,0
     
     POP_TOP   = 1,0
     ROT_TWO   = 2,2
@@ -92,7 +94,7 @@ class _se:
     DUP_TOP   = 1,2
 
     UNARY_POSITIVE = UNARY_NEGATIVE = UNARY_NOT = UNARY_CONVERT = \
-        UNARY_INVERT = GET_ITER = LOAD_ATTR = IMPORT_NAME = 1,1
+        UNARY_INVERT = GET_ITER = LOAD_ATTR = 1,1
 
     IMPORT_FROM = 1,2
 
@@ -119,7 +121,7 @@ class _se:
     PRINT_NEWLINE = 0,0
     PRINT_EXPR = PRINT_ITEM = PRINT_NEWLINE_TO = IMPORT_STAR = 1,0
     STORE_NAME = STORE_GLOBAL = STORE_FAST = 1,0
-    PRINT_ITEM_TO = LIST_APPEND = 2,0
+    PRINT_ITEM_TO = 2,0
 
     LOAD_LOCALS = LOAD_CONST = LOAD_NAME = LOAD_GLOBAL = LOAD_FAST = \
         LOAD_CLOSURE = LOAD_DEREF = BUILD_MAP = 0,1
@@ -129,16 +131,25 @@ class _se:
     EXEC_STMT = 3,0
     BUILD_CLASS = 3,1
 
-    if python_version == '2.4':
-        YIELD_VALUE = 1,0
-        IMPORT_NAME = 1,1
-    elif python_version == '2.6':
-    	STORE_MAP = 2,0
-    else:
-        YIELD_VALUE = 1,1
-        IMPORT_NAME = 2,1
+    STORE_MAP = MAP_ADD = 2,0
+    SET_ADD = 1,0
 
-	
+    if   python_version == '2.4':
+      YIELD_VALUE = 1,0
+      IMPORT_NAME = 1,1
+      LIST_APPEND = 2,0
+    elif python_version == '2.5':
+      YIELD_VALUE = 1,1
+      IMPORT_NAME = 2,1
+      LIST_APPEND = 2,0
+    elif python_version == '2.6':
+      YIELD_VALUE = 1,1
+      IMPORT_NAME = 2,1
+      LIST_APPEND = 2,0
+    elif python_version == '2.7':
+      YIELD_VALUE = 1,1
+      IMPORT_NAME = 2,1
+      LIST_APPEND = 1,0
 
 
 _se = dict((op, getattr(_se, opname[op]))
@@ -150,6 +161,8 @@ hasflow = opcodes - set(_se) - \
                CALL_FUNCTION_VAR_KW, BUILD_TUPLE, BUILD_LIST,
                UNPACK_SEQUENCE, BUILD_SLICE, DUP_TOPX,
                RAISE_VARARGS, MAKE_FUNCTION, MAKE_CLOSURE])
+if python_version == '2.7':
+  hasflow = hasflow - set([BUILD_SET])
 
 def getse(op, arg=None):
     """Get the stack effect of an opcode, as a (pop, push) tuple.
@@ -185,6 +198,8 @@ def getse(op, arg=None):
     elif op == BUILD_TUPLE:
         return arg, 1
     elif op == BUILD_LIST:
+        return arg, 1
+    elif python_version == '2.7' and op == BUILD_SET:
         return arg, 1
     elif op == UNPACK_SEQUENCE:
         return 1, arg
@@ -525,10 +540,20 @@ class Code(object):
                 # One possibility for a jump
                 yield label_pos[arg], curstack
 
-            elif op in (JUMP_IF_FALSE, JUMP_IF_TRUE):
+            elif python_version < '2.7' and op in (JUMP_IF_FALSE, JUMP_IF_TRUE):
                 # Two possibilities for a jump
                 yield label_pos[arg], curstack
                 yield pos+1, curstack
+
+            elif python_version >= '2.7' and op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
+                # Two possibilities for a jump
+                yield label_pos[arg], newstack(-1)
+                yield pos+1, newstack(-1)
+                
+            elif python_version >= '2.7' and op in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
+                # Two possibilities for a jump
+                yield label_pos[arg], curstack
+                yield pos+1, newstack(-1)
 
             elif op == FOR_ITER:
                 # FOR_ITER pushes next(TOS) on success, and pops TOS and jumps
@@ -545,21 +570,28 @@ class Code(object):
                 # CONTINUE_LOOP jumps to the beginning of a loop which should
                 # already ave been discovered, but we verify anyway.
                 # It pops a block.
-                yield label_pos[arg], curstack[:-1]
+                if python_version == '2.6':
+                  pos, stack = label_pos[arg], curstack[:-1]
+                  if stacks[pos] != stack: #this could be a loop with a 'with' inside
+                    yield pos, stack[:-1] + (stack[-1]-1,)
+                  else:
+                    yield pos, stack
+                else:
+                  yield label_pos[arg], curstack[:-1]
 
             elif op == SETUP_LOOP:
                 # We continue with a new block.
                 # On break, we jump to the label and return to current stack
                 # state.
-                yield pos+1, curstack + (0,)
                 yield label_pos[arg], curstack
+                yield pos+1, curstack + (0,)
 
             elif op == SETUP_EXCEPT:
                 # We continue with a new block.
                 # On exception, we jump to the label with 3 extra objects on
                 # stack
-                yield pos+1, curstack + (0,)
                 yield label_pos[arg], newstack(3)
+                yield pos+1, curstack + (0,)
 
             elif op == SETUP_FINALLY:
                 # We continue with a new block.
@@ -567,16 +599,20 @@ class Code(object):
                 # stack, but to keep stack recording consistent, we behave as
                 # if we add only 1 object. Extra 2 will be added to the actual
                 # recording.
-                yield pos+1, curstack + (0,)
                 yield label_pos[arg], newstack(1)
+                yield pos+1, curstack + (0,)
 
+            elif python_version == '2.7' and op == SETUP_WITH:
+                yield label_pos[arg], curstack
+                yield pos+1, newstack(-1) + (1,)
+                
             elif op == POP_BLOCK:
                 # Just pop the block
                 yield pos+1, curstack[:-1]
 
             elif op == END_FINALLY:
                 # Since stack recording of SETUP_FINALLY targets is of 3 pushed
-                # objects (as when an exception is raised), we pop 3 objects.
+                # objects (as when an exception is raised), we pop 3 objects.               
                 yield pos+1, newstack(-3)
 
             elif op == WITH_CLEANUP:
@@ -584,7 +620,10 @@ class Code(object):
                 # targets, and the stack recording is that of a raised
                 # exception, we can simply pop 1 object and let END_FINALLY
                 # pop the remaining 3.
-                yield pos+1, newstack(-1)
+                if python_version == '2.7':
+                  yield pos+1, newstack(2)
+                else:
+                  yield pos+1, newstack(-1)
 
             else:
                 assert False, "Unhandled opcode: %r" % op
@@ -738,10 +777,10 @@ class Code(object):
         co_nlocals = len(co_varnames)
         co_cellvars = tuple(co_cellvars)
 
-        return new.code(co_argcount, co_nlocals, co_stacksize, co_flags,
-                        co_code, co_consts, co_names, co_varnames,
-                        self.filename, self.name, self.firstlineno, co_lnotab,
-                        co_freevars, co_cellvars)
+        return types.CodeType(co_argcount, co_nlocals, co_stacksize, co_flags,
+                              co_code, co_consts, co_names, co_varnames,
+                              self.filename, self.name, self.firstlineno, co_lnotab,
+                              co_freevars, co_cellvars)
 
                 
 def printcodelist(codelist, to=sys.stdout):
