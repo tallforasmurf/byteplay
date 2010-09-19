@@ -5,7 +5,7 @@ from byteplay import __version__ as lib_version
 
 setup(
        name = 'byteplay',
-       author='Noam Raph',
+       author='Noam Yorav-Raphael',
        author_email='noamraph@gmail.com',
        url='http://code.google.com/p/byteplay',
        download_url='http://code.google.com/p/byteplay/downloads/list',
