@@ -1,5 +1,5 @@
 # byteplay - Python bytecode assembler/disassembler.
-# Copyright (C) 2010 Noam Raphael
+# Copyright (C) 2006-2010 Noam Yorav-Raphael
 # Homepage: http://code.google.com/p/byteplay
 #
 # This library is free software; you can redistribute it and/or
