@@ -23,10 +23,11 @@ byteplay lets you easily play with existing bytecode and see what happens.
 
 ## Why this fork?
 
-I would like to use it on Python 3. I've made this fork (by export from code.google.com)
+I (tallforasmurf) would like to use it on Python 3.
+I've made this fork (by export from code.google.com)
 to investigate the possibility of converting it to Python 3.
 
-When/if it works with Python3, then the Promise package (https://github.com/rfk/promise/)
+When/if it works with Python3, then Ryan Kelly's Promise package (https://github.com/rfk/promise/)
 which is based on byteplay, could also be brought to Python 3, and possibly extended.
 
 
