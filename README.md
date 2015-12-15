@@ -25,6 +25,12 @@ or in assembling functions on your own, you may find byteplay useful.
 You may also find it useful if you are interested in how Python’s bytecode actually works;
 byteplay lets you easily play with existing bytecode and see what happens.
 
+## More info...
+
+If you do not know about Python code objects and bytecode,
+you could do worse than audit Philip Guo's
+lectures on youtube: https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S
+
 ## Why this fork?
 
 I (tallforasmurf) would like to play with byteplay on Python 3,
