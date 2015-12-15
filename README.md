@@ -27,9 +27,12 @@ byteplay lets you easily play with existing bytecode and see what happens.
 
 ## More info...
 
-If you do not know about Python code objects and bytecode,
+If you do not know enough about Python code objects and bytecode,
 you could do worse than audit Philip Guo's
 lectures on youtube: https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S
+
+See also the Byterun project, https://github.com/nedbat/byterun,
+which is a python bytecode executor written in Python.
 
 ## Why this fork?
 
