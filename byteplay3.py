@@ -550,18 +550,21 @@ class Code(object):
 
     Code offers the following class methods:
 
-TODO: analyze the relative benefits of having from_code as a CLASS method
-versus having Code.__init__() take a code object and self-initializing,
-and to_code() be an object method that returns a code object. Note currently
-the __init__() takes all the pieces of a code object; in this it kinda sorta
-mimics PyCodeNew() in codeobject.c, but the parallel is not close enough to
-be instructive. Nothing in this module calls Code() now.
-
     Code.from_code(code_object): analyzes a Python code object and returns
     an instance of this class that has equivalent contents.
 
     Code.to_code(Code_object): analyzes a Code object and returns a Python
     code object with equivalent contents.
+
+TODO: analyze the relative benefits of having from_code() as a class method
+that calls Code.__init__() with the many pieces of a code object, versus
+having Code.__init__() take a whole code object and self-initializing.
+(Note that from_code() does recurse into itself when handling the argument of
+MAKE_FUNCTION and _CLOSURE bytecodes.)
+
+In byteplay2, Code.__init__() takes all the pieces of a code object; in this
+it kinda sorta mimics PyCodeNew() in codeobject.c, but the parallel is not
+close enough to be instructive.
 
     The attributes of any Code object are:
 
@@ -614,7 +617,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
     """
 
-    # Possibly somebody creates a Code object by calling the class with
+    # Possibly somebody creates a Code object by calling Code() with
     # all these values. More likely, the class method from_code() below
     # is used. It takes a code object apart to find all these things
     # and creates the Code object from the parts.
@@ -641,7 +644,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
         This is a modified version of dis.findlinestarts. This version allows
         multiple "line starts" with the same line number. (The dis version
-        has a test "if lineno != lastlineno" around its yield.)
+        conditions its yield on a test "if lineno != lastlineno".)
 
         FYI: code.co_lnotab is a byte array with one pair of bytes for each
         effective source line number in the bytecode. An effective line is
@@ -649,11 +652,15 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         line number, typically the number of the "def" statement, is in
         code.co_firstlineno.
 
-        An even byte of co_lnotab is the offset to the bytecode generated from
-        the next effective line number. The following odd byte is an increment
-        on the previous line's number to the next line's number.
+        An even byte of co_lnotab is the offset to the bytecode generated
+        from the next effective line number. The following odd byte is an
+        increment on the previous line's number to the next line's number.
         Thus co_firstlineno+co_lnotab[1] is the first effective line's
         number, and co_lnotab[0] is the number of bytes it generated.
+
+        Note that an effective line number generates code by definition,
+        hence the even byte cannot be zero; and as line numbers are
+        monotonically increasing, the odd byte cannot be zero either.
 
         But what, the curious reader might ask, does Python do if a source
         line generates more than 255 bytes of code? In that *highly* unlikely
@@ -667,13 +674,16 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         Then compile.c generates pairs of (0, 255) until it has accounted for
         the line number difference and a final pair of (offset,lineincr%256).
 
-        Uh, but...? What now, annoying reader? Well, does the following
+        Uh, but...? Yes, what now, annoying reader? Well, does the following
         code handle these special cases of (255,0) and (0,255) properly?
         It handles the (0,255) case correctly, because of the "if byte_incr"
         test which skips the yield() but increments lineno. It does not handle
         the case of (255,0) correctly; it will yield false pairs (255,0).
         Fortunately that will only arise e.g. when disassembling some
-        "obfuscated" code where all the newlines are replaced with semicolons.
+        "obfuscated" code where most newlines are replaced with semicolons.
+
+        Oh, and yes, the to_code() method does properly handle generation
+        of the (255,0) and (0,255) entries correctly.
 
         """
         # grab the even bytes as integer byte_increments:
@@ -693,7 +703,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
     @classmethod
     def from_code(cls, code_object):
         """
-        Disassemble a Python code object into a Code object.
+        Disassemble a Python code object and make a Code object from the bits.
         """
         # get the actual bytecode string out of the code object
         co_code = code_object.co_code
@@ -713,7 +723,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         #
         cellfree = code_object.co_cellvars + code_object.co_freevars
 
-        # Create our result, a CodeList object.
+        # Create a CodeList object to represent the bytecode string.
 
         code = CodeList()
         n = len(co_code)    # number bytes in the bytecode string
@@ -737,10 +747,11 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
             i += 1 # index to the argument if any
 
-            # If this op has a code object as its argument (MAKE_FUNCTION or _CLOSURE)
-            # then that code object should have been pushed on the stack by a
-            # preceding LOAD_CONST. Check that, and then convert the code object
-            # into a Code and replace the const with a ref to that object.
+            # If this op has a code object as its argument (MAKE_FUNCTION or
+            # _CLOSURE) then that code object should have been pushed on the
+            # stack by a preceding LOAD_CONST. Check that. Then recursively
+            # convert the argument code object into a Code and replace the
+            # const with a ref to that object.
 
             # TODO: wouldn't this make more sense as:
             #  if op not in hasarg:... elif op in hascode: ... else...?
@@ -799,14 +810,27 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                     # whatever, just put the arg in the tuple
                     code.append((op, arg))
 
-        varargs = bool(co.co_flags & CO_VARARGS)
-        varkwargs = bool(co.co_flags & CO_VARKEYWORDS)
-        newlocals = bool(co.co_flags & CO_NEWLOCALS)
-        args = co.co_varnames[:co.co_argcount + varargs + varkwargs]
-        if co.co_consts and isinstance(co.co_consts[0], basestring):
+        # Store flags from the code object as booleans.
+        # TODO: why do we not preserve the other names?
+        # CO_OPTIMIZED, CO_VARKEYWORDS, CO_NESTED, CO_GENERATOR, CO_NOFREE, CO_COROUTINE, CO_ITERABLE_COROUTINE
+        # (the latter two are 3.5 adds). Or at least, store co_flags itself
+        varargs = bool(code_object.co_flags & CO_VARARGS)
+        varkwargs = bool(code_object.co_flags & CO_VARKEYWORDS)
+        newlocals = bool(code_object.co_flags & CO_NEWLOCALS)
+
+        # Get the names of arguments as strings, from the varnames tuple. The
+        # order of name strings is the names of regular arguments, then the
+        # name of a *arg if any, then the name of a **arg if any, followed by
+        # the names of locals.
+        args = code_object.co_varnames[:code_object.co_argcount + varargs + varkwargs]
+
+        # Preserve a docstring if any. If there are constants and the first
+        # constant is a string, Python assumes that's a docstring.
+        docstring = None
+        if code_object.co_consts and isinstance(code_object.co_consts[0], basestring):
             docstring = co.co_consts[0]
-        else:
-            docstring = None
+
+        # Funnel all the collected bits through the Code.__init__() method.
         return cls(code = code,
                    freevars = co.co_freevars,
                    args = args,
@@ -818,6 +842,9 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                    firstlineno = co.co_firstlineno,
                    docstring = docstring,
                    )
+
+    # Define equality between Code objects the same way that codeobject.c
+    # implements the equality test, by ORing the inequalities of each part.
 
     def __eq__(self, other):
         if (self.freevars != other.freevars or
@@ -833,8 +860,9 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             ):
             return False
 
-        # Compare code. This isn't trivial because labels should be matching,
-        # not equal.
+        # Compare code. For codeobject.c this is a comparison of two
+        # bytestrings, but this is harder because of extra info, e.g. labels
+        # should be matching, not necessarily identical.
         labelmapping = {}
         for (op1, arg1), (op2, arg2) in itertools.izip(self.code, other.code):
             if isinstance(op1, Label):
@@ -850,6 +878,12 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                     if arg1 != arg2:
                         return False
         return True
+
+    # Re-create the co_flags value based in part on the booleans we pulled
+    # out into the Code object (which can be modified by users of the API!)
+    # and in part on the contents of the code string itself.
+
+    # TODO: add Python 3.x flags, CO_NESTED, CO_COROUTINE, CO_ITERABLE_COROUTINE
 
     def _compute_flags(self):
         opcodes = set(op for op, arg in self.code if isopcode(op))
@@ -880,9 +914,11 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         code = self.code
 
         # A mapping from labels to their positions in the code list
-        label_pos = dict((op, pos)
-                         for pos, (op, arg) in enumerate(code)
-                         if isinstance(op, Label))
+
+        label_pos = dict( (op, pos)
+                          for pos, (op, arg) in enumerate(code)
+                          if isinstance(op, Label)
+                        )
 
         # sf_targets are the targets of SETUP_FINALLY opcodes. They are recorded
         # because they have special stack behaviour. If an exception was raised
@@ -898,9 +934,10 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         # yield the stack state of the target as if 1 object was pushed, but
         # this will be corrected in the actual stack recording.
 
-        sf_targets = set(label_pos[arg]
-                         for op, arg in code
-                         if op == SETUP_FINALLY)
+        sf_targets = set( label_pos[arg]
+                          for op, arg in code
+                          if op == SETUP_FINALLY
+                        )
 
         # What we compute - for each opcode, its stack state, as an n-tuple.
         # n is the number of blocks pushed. For each block, we record the number
@@ -908,7 +945,8 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         stacks = [None] * len(code)
 
         def get_next_stacks(pos, curstack):
-            """Get a code position and the stack state before the operation
+            """
+            Get a code position and the stack state before the operation
             was done, and yield pairs (pos, curstack) for the next positions
             to be explored - those are the positions to which you can get
             from the given (pos, curstack).
@@ -920,8 +958,15 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             if isinstance(op, Label):
                 # We should check if we already reached a node only if it is
                 # a label.
+
+                #TODO: is the above original comment a TODO or just a remark?
+                #and what does it mean?
+
                 if pos in sf_targets:
+                    # Adjust a SETUP_FINALLY from 1 to 3 stack entries.
+                    # TODO: is there a colon missing in the following???
                     curstack = curstack[:-1] + (curstack[-1] + 2,)
+
                 if stacks[pos] is None:
                     stacks[pos] = curstack
                 else:
@@ -944,25 +989,25 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 # No place in particular to continue to
                 pass
 
-            elif op == MAKE_CLOSURE and python_version == '2.4':
-                # This is only relevant in Python 2.4 - in Python 2.5 the stack
-                # effect of MAKE_CLOSURE can be calculated from the arg.
-                # In Python 2.4, it depends on the number of freevars of TOS,
-                # which should be a code object.
-                if pos == 0:
-                    raise ValueError("MAKE_CLOSURE can't be the first opcode")
-                lastop, lastarg = code[pos-1]
-                if lastop != LOAD_CONST:
-                    raise ValueError( "MAKE_CLOSURE should come after a LOAD_CONST op")
-                try:
-                    nextrapops = len(lastarg.freevars)
-                except AttributeError:
-                    try:
-                        nextrapops = len(lastarg.co_freevars)
-                    except AttributeError:
-                        raise ValueError("MAKE_CLOSURE preceding const should be a code or a Code object")
+            #elif op == MAKE_CLOSURE and python_version == '2.4':
+                ## This is only relevant in Python 2.4 - in Python 2.5 the stack
+                ## effect of MAKE_CLOSURE can be calculated from the arg.
+                ## In Python 2.4, it depends on the number of freevars of TOS,
+                ## which should be a code object.
+                #if pos == 0:
+                    #raise ValueError("MAKE_CLOSURE can't be the first opcode")
+                #lastop, lastarg = code[pos-1]
+                #if lastop != LOAD_CONST:
+                    #raise ValueError( "MAKE_CLOSURE should come after a LOAD_CONST op")
+                #try:
+                    #nextrapops = len(lastarg.freevars)
+                #except AttributeError:
+                    #try:
+                        #nextrapops = len(lastarg.co_freevars)
+                    #except AttributeError:
+                        #raise ValueError("MAKE_CLOSURE preceding const should be a code or a Code object")
 
-                yield pos+1, newstack(-arg-nextrapops)
+                #yield pos+1, newstack(-arg-nextrapops)
 
             elif op not in hasflow:
                 # Simple change of stack
@@ -973,17 +1018,19 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 # One possibility for a jump
                 yield label_pos[arg], curstack
 
-            elif python_version < '2.7' and op in (JUMP_IF_FALSE, JUMP_IF_TRUE):
-                # Two possibilities for a jump
-                yield label_pos[arg], curstack
-                yield pos+1, curstack
+            #elif python_version < '2.7' and op in (JUMP_IF_FALSE, JUMP_IF_TRUE):
+                ## Two possibilities for a jump
+                #yield label_pos[arg], curstack
+                #yield pos+1, curstack
 
-            elif python_version >= '2.7' and op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
+            # elif python_version >= '2.7' and op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
+            elif op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
                 # Two possibilities for a jump
                 yield label_pos[arg], newstack(-1)
                 yield pos+1, newstack(-1)
 
-            elif python_version >= '2.7' and op in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
+            # elif python_version >= '2.7' and op in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
+            elif op in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
                 # Two possibilities for a jump
                 yield label_pos[arg], curstack
                 yield pos+1, newstack(-1)
@@ -1001,16 +1048,17 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
             elif op == CONTINUE_LOOP:
                 # CONTINUE_LOOP jumps to the beginning of a loop which should
-                # already ave been discovered, but we verify anyway.
+                # already have been discovered, but we verify anyway.
                 # It pops a block.
-                if python_version == '2.6':
-                  pos, stack = label_pos[arg], curstack[:-1]
-                  if stacks[pos] != stack: #this could be a loop with a 'with' inside
-                    yield pos, stack[:-1] + (stack[-1]-1,)
-                  else:
-                    yield pos, stack
-                else:
-                  yield label_pos[arg], curstack[:-1]
+                #if python_version == '2.6':
+                  #pos, stack = label_pos[arg], curstack[:-1]
+                  #if stacks[pos] != stack: #this could be a loop with a 'with' inside
+                    #yield pos, stack[:-1] + (stack[-1]-1,)
+                  #else:
+                    #yield pos, stack
+                #else:
+                  #yield label_pos[arg], curstack[:-1]
+                yield label_pos[arg], curstack[:-1]
 
             elif op == SETUP_LOOP:
                 # We continue with a new block.
@@ -1077,7 +1125,9 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         return maxsize
 
     def to_code(self):
-        """Assemble a Python code object from a Code object."""
+        """
+        Assemble a Python code object from a Code object.
+        """
         co_argcount = len(self.args) - self.varargs - self.varkwargs
         co_stacksize = self._compute_stacksize()
         co_flags = self._compute_flags()
@@ -1093,13 +1143,16 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         #    for ops in "hasfree".
         # 2. We need to put arguments which are cell vars in the beginning
         #    of co_cellvars
-        cellvars = set(arg for op, arg in self.code
-                       if isopcode(op) and op in hasfree
-                       and arg not in co_freevars)
+        cellvars = set( arg for op, arg in self.code
+                        if isopcode(op)
+                        and op in hasfree
+                        and arg not in co_freevars
+                    )
         co_cellvars = [x for x in self.args if x in cellvars]
 
         def index(seq, item, eq=operator.eq, can_append=True):
-            """Find the index of item in a sequence and return it.
+            """
+            Find the index of item in a sequence and return it.
             If it is not found in the sequence, and can_append is True,
             it is appended to the sequence.
 
@@ -1134,6 +1187,9 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 incr_pos = len(co_code) - lastlinepos
                 lastlineno = arg
                 lastlinepos = len(co_code)
+
+                # See pedantic comments about the encoding of co_lnotab and
+                # values over 255 in the prolog to from_code().
 
                 if incr_lineno == 0 and incr_pos == 0:
                     co_lnotab.append(0)
@@ -1201,6 +1257,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             co_code[pos+1] = jump & 0xFF
             co_code[pos+2] = (jump >> 8) & 0xFF
 
+        # TODO: following use of .tostring is probably an error in Python 3?
         co_code = co_code.tostring()
         co_lnotab = co_lnotab.tostring()
 
@@ -1216,7 +1273,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                               co_freevars, co_cellvars)
 
 
-
+# END OF Byteplay external API. Following are for test only.
 
 def recompile(filename):
     """
@@ -1242,10 +1299,12 @@ def recompile(filename):
     codestring = f.read()
 
     # Get the modification timestamp of the input file. Using os.stat instead
-    # of os.fstat as they are equivalent in Py3. Not sure why they guard
-    # against an Attribute error; os.stat, fileobject.fileno and
-    # stat_object.st_mtime all are documented. Replace long() casts with
-    # int() casts for Py3.
+    # of os.fstat as they are equivalent in Py3.
+    #
+    # Not sure why the original has a guard against an Attribute error;
+    # os.stat, fileobject.fileno and stat_object.st_mtime all are documented.
+    #
+    # Replace long() casts with int() casts for Py3.
 
     try:
         timestamp = os.stat(f.fileno()).st_mtime
@@ -1280,7 +1339,10 @@ def recompile(filename):
     # One supposes this message is checked by "make test"?
 
     message = "reassembled %r imported.\n" % filename
-    cod.code[:0] = [ # __import__('sys').stderr.write(message)
+
+    # Insert code tuples meaning __import__('sys').stderr.write(message)
+
+    cod.code[:0] = [
         (LOAD_GLOBAL, '__import__'),
         (LOAD_CONST, 'sys'),
         (CALL_FUNCTION, 1),
@@ -1302,11 +1364,12 @@ def recompile(filename):
 
     fc = open(filename+'c', 'w+b')
     fc.write('\0\0\0\0')
-    fc.write(struct.pack('<l', timestamp))
+    fc.write( struct.pack( '<l', timestamp ) )
     marshal.dump(codeobject2, fc)
     fc.flush()
     fc.seek(0, 0)
-    fc.write(imp.get_magic())
+    # TODO convert to importlib.util.MAGIC_NUMBER
+    fc.write( imp.get_magic() )
     fc.close()
 
 def recompile_all(path):
@@ -1335,6 +1398,9 @@ def main():
 
     The purpose of this is to be able to test that
     X==assemble(disassemble(X)) for all X.py in the directory.
+
+    TODO: Well, actually not, because recompile() actually adds code.
+    That's probably not a good idea, or at least, should be optional?
     '''
     import os
     if len( sys.argv ) == 2 and os.path.exists( sys.argv[ 1 ] ) :
