@@ -1,10 +1,20 @@
-# TODO: write a proper docstring
+'''
+                        byteplay3.py
 
-# byteplay - Python bytecode assembler/disassembler.
-#
-# Homepage: http://code.google.com/p/byteplay
-#
+byteplay is a module supporting the disassembly, modification, and re-assembly
+of Python bytecode objects.
 
+Expected use:
+    import byteplay3 as bp
+    myfunc_code = bp.Code( myfunc.__code__ )
+    # manipulate myfunc_code using bp. members...
+    myfunc.__code__ = myfunc_code.to_code()
+
+The following names are available from the module:
+
+
+
+'''
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
