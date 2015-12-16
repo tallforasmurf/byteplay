@@ -1,35 +1,37 @@
 # TODO: write a proper docstring
-# TODO: move COPYING.TXT into the package
-# TODO: increment copyright
 
 # byteplay - Python bytecode assembler/disassembler.
-# Copyright (C) 2006-2010 Noam Yorav-Raphael
+#
 # Homepage: http://code.google.com/p/byteplay
 #
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Lesser General Public
-# License as published by the Free Software Foundation; either
-# version 2.1 of the License, or (at your option) any later version.
-#
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public
-# License along with this library; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-#
-# Many thanks to Greg X for adding support for Python 2.6 and 2.7!
 
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # Establish version and other import dunder-constants.
-# TODO: add other __stuff__
-# TODO: make version 0.34?
 
-__version__ = '0.2'
+__license__ = '''
+                 License (GPL-3.0) :
+    This file is part of the byteplay module.
+    byteplay is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This module is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You can find a copy of the GNU General Public License in the file
+    COPYING.TXT included in the distribution of this module, or see:
+    <http://www.gnu.org/licenses/>.
+'''
+__version__ = "3.0.0"
+__author__  = "David Cortesi"
+__copyright__ = "Copyright (C) 2006-2010 Noam Yorav-Raphael; Python3 modifications (C) 2016 David Cortesi"
+__maintainer__ = "David Cortesi"
+__email__ = "davecortesi@gmail.com"
 
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
