@@ -28,7 +28,7 @@ __license__ = '''
     <http://www.gnu.org/licenses/>.
 '''
 __version__ = "3.0.0"
-__author__  = "David Cortesi"
+__author__  = "Noam Yorav-Raphael (Python 2); David Cortesi (Python 3 mods)"
 __copyright__ = "Copyright (C) 2006-2010 Noam Yorav-Raphael; Python3 modifications (C) 2016 David Cortesi"
 __maintainer__ = "David Cortesi"
 __email__ = "davecortesi@gmail.com"
