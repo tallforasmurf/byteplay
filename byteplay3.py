@@ -22,7 +22,7 @@ The following names are available from the module:
 
         Opcode
             An int, the value of a Python bytecode verb, but its __str__
-            value is the name of the opcode, e.g. "LOAD_FAST" for 3.
+            value is the name of the opcode, e.g. "POP_TOP" for 1.
 
         CodeList
             An expanded form of a Python bytecode string: a list of
