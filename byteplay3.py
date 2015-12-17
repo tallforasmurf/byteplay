@@ -11,8 +11,86 @@ Expected use:
     myfunc.__code__ = myfunc_code.to_code()
 
 The following names are available from the module:
+    Classes:
 
+        Code
+            An object that stores the properties of of a Python code object.
+            The class method Code.from_code(code_object) returns a Code
+            object. The object method to_code() returns a code object from
+            the contents of the Code object. See the class docstring below
+            for many more features.
 
+        Opcode
+            An int, the value of a Python bytecode verb, but its __str__
+            value is the name of the opcode, e.g. "LOAD_FAST" for 3.
+
+        CodeList
+            An expanded form of a Python bytecode string: a list of
+            (Opcode, argument) tuples. A Code object .code member is
+            a CodeList, just as the co_code member of a code object is
+            a bytestring of opcodes.
+
+        Label
+            Class of a minimal object used in a CodeList, where a tuple
+            (Label,None) marks a jump target in the list. Discarded
+            when to_code() re-creates the code object.
+
+    Global vars:
+
+        cmp_op
+            a tuple of the Python comparison operator names such as "<="
+            and "is not"; the strings that can appear as the argument of
+            the COMPARE_OP bytecode. From the standard module "opcode".
+
+        SetLineno
+            Global var holding the single object of the SetLinenoType
+            class. (SetLineno, line_number) in a CodeList marks the
+            beginning of code from source line_number.
+
+        opmap
+            A dict of { 'OPCODE_NAME' : Opcode } for all valid bytecodes.
+
+        opname
+            Inverse of opmap, { Opcode : 'OPCODE_NAME }
+
+        opcodes
+            A set of valid Opcodes, for quick testing (x in opcodes...)
+
+        The following are sets of Opcodes used for fast tests of opcode
+        features, "if oc in hasarg..."
+
+        hasarg     opcodes that take an argument
+        hascode    opcodes that take a code object argument
+        hascompare opcodes that take one of cmp_op
+        hasjabs    opcodes that jump to an absolute bytecode offset
+        hasjrel    opcodes that jump to a relative offset
+        hasjump    union of preceding two sets
+        haslocal   opcodes that refer to a local e.g. STORE_FAST
+        hasname    opcodes that refer to a var by name
+        hasfree    opcodes that refer to a "free" var
+        hasflow    opcodes that cause nonsequential execution
+
+        POP_TOP=Opcode(1)
+        ... etc ...
+        LOAD_CLASSDEREF=Opcode(148)
+            *ALL* Python opcode names are added to the globals of this
+            module, with values as OpCode objects. The same names are
+            available from the standard module "opcode" valued as ints.
+
+    Functions:
+
+        getse( opcode, arg=None )
+            given an opcode number and the opcode's argument if any,
+            return the stack effect of that opcode as a (pop_item_count,
+            push_item_count) tuple.            .
+
+        isopcode( opcode )
+            true when opcode is a Python-defined opcode and not one
+            of the two convenience values Label and SetLineno.
+
+        printcodelist( CodeList_object, to=sys.stdout )
+            print a disassembly of the code in CodeList_object to the
+            default output stream or a specified file object.
 
 '''
 
@@ -49,14 +127,30 @@ __email__ = "davecortesi@gmail.com"
 # The __all__ global establishes the complete API of the module on import.
 # "from byteplay import *" imports these names (plus a bunch of opcode-names,
 # see below):
-# TODO: alphabetize this
 
-__all__ = ['opmap', 'opname', 'opcodes',
-           'cmp_op', 'hasarg', 'hasname', 'hasjrel', 'hasjabs',
-           'hasjump', 'haslocal', 'hascompare', 'hasfree', 'hascode',
-           'hasflow', 'getse',
-           'Opcode', 'SetLineno', 'Label', 'isopcode', 'Code',
-           'CodeList', 'printcodelist']
+__all__ = ['cmp_op',
+           'Code',
+           'CodeList',
+           'getse',
+           'hasarg',
+           'hascode',
+           'hascompare',
+           'hasjabs',
+           'hasjrel',
+           'hasjump',
+           'haslocal',
+           'hasname',
+           'hasfree',
+           'hasflow',
+           'isopcode',
+           'Label',
+           'Opcode',
+           'opmap',
+           'opname',
+           'opcodes',
+           'printcodelist',
+           'SetLineno'
+           ]
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
@@ -208,9 +302,14 @@ hascode = set([MAKE_FUNCTION, MAKE_CLOSURE])
 #
 # The contents of a CodeList is a series of tuples (Opcode, argument) where
 # Opcode is an Opcode object based on the bytecode, and argument is either
-# None or the argument value of the opcode.
+# None or the actual argument value of the opcode.
 #
-# The __str__() result of a CodeList is a complete formatted disassembly, one
+# Argument values are typically integers, but they can be any type of
+# constant, for example if a function defines an inner function, one of its
+# first opcodes is (LOAD_CONST, <python code object>) where the constant
+# value is an entire code object, in effect a large byte array.
+#
+# The __str__() result of a CodeList is a formatted disassembly, one
 # line per bytecode joined by newlines. To print a disassembly, just
 # print(codelist), or store it as disassembly = str(codelist).
 #
