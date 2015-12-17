@@ -201,14 +201,25 @@ if sys.version_info[0] != 3 :
 #
 # Define opcodes and information about them, basically extending the values
 # presented by module opcode. The global opname is established just below.
+#
+# In byteplay 2, Opcode.__repr__ is the same as __str__. However, __repr__()
+# is supposed to return a string that will recreate the object, right?
+# So I am changing it so that Opcode.__str__ --> the display name, but
+# Opcode.__repr__ --> "Opcode(n)". Query: should it instead return
+# "byteplay3.Opcode(n)"? But what if the user did "import byteplay3 as BP"?
 
 class Opcode(int):
     """
-    An int which represents an opcode but has a nicer __repr__ and __str__.
+    An int which represents an opcode but its str() is the opcode name,
+    for example
+        Opcode(1).__str__() --> 'POP_TOP'
+        Opcode(1).__repr__() --> 'Opcode(1)'
+        int(Opcode(1)) --> 1
     """
-    def __repr__(self):
+    def __str__( self ):
         return opname[self]
-    __str__ = __repr__
+    def __repr__( self ):
+        return 'Opcode(%s)' % int(self)
 
 # opcode.opmap is a dict of { "op_name" : op_int_value }. Here we make our
 # own opmap in which op_int_value is an Opcode object rather than a simple
