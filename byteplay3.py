@@ -10,7 +10,14 @@ Expected use:
     # manipulate myfunc_code using bp. members...
     myfunc.__code__ = myfunc_code.to_code()
 
+            API CHANGES vs. byteplay 2 (original)
+
+1. Only Python 3.x supported, cannot use under Python 2.
+2. Opcode.__repr__() has different output than Opcode.__str__()
+3. CodeList.__str__() value is a list of strings, not a single string
+
 The following names are available from the module:
+
     Classes:
 
         Code
@@ -93,7 +100,8 @@ The following names are available from the module:
 
         printcodelist( CodeList_object, to=sys.stdout )
             print a disassembly of the code in CodeList_object to the
-            default output stream or a specified file object.
+            default output stream or a specified file object. If "to"
+            file is opened in binary mode, the output is UTF-8 encoded.
 
 '''
 
