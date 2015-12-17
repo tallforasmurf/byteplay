@@ -474,16 +474,14 @@ class Label(object):
     pass
 
 # This boolean function allows distinguishing real opcodes in a CodeList from
-# the two non-opcode types. Note this assumes there only ever exists the one
-# instance of SetLineno, although there may be multiple Label objects.
-#
-# TODO: would this not be safer using "not isinstance(obj,SetLinenoType)"?
+# the two non-opcode types. Note there should only ever exist the one
+# instance of SetLinenoType, the global SetLineno. But who knows?
 
 def isopcode(obj):
     """
     Return whether obj is an opcode - not SetLineno or Label
     """
-    return obj is not SetLineno and not isinstance(obj, Label)
+    return not isinstance(obj,SetLinenoType) and not isinstance(obj, Label)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
