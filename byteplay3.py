@@ -26,13 +26,15 @@ The following names are available from the module:
 
         CodeList
             An expanded form of a Python bytecode string: a list of
-            (Opcode, argument) tuples. A Code object .code member is
-            a CodeList, just as the co_code member of a code object is
-            a bytestring of opcodes.
+            (Opcode, argument) tuples. A CodeList is the .code member of
+            a Code object, just as a bytestring of opcodes is the
+            co_code member of a code object.
 
         Label
-            Class of a minimal object used in a CodeList, where a tuple
-            (Label,None) marks a jump target in the list. Discarded
+            Class of a minimal object used to mark jump targets in a
+            CodeList. A tuple (Label(),None) precedes the tuple for an opcode
+            that is the destination of a jump. These tuples make it easier
+            to generate a disassembly of a CodeList; they are discarded
             when to_code() re-creates the code object.
 
     Global vars:
@@ -45,7 +47,8 @@ The following names are available from the module:
         SetLineno
             Global var holding the single object of the SetLinenoType
             class. (SetLineno, line_number) in a CodeList marks the
-            beginning of code from source line_number.
+            beginning of code from source line_number. These tuples are
+            converted into the co_lnotab array in to_code().
 
         opmap
             A dict of { 'OPCODE_NAME' : Opcode } for all valid bytecodes.
@@ -177,8 +180,7 @@ import operator # names for standard operators such as __eq__
 #
 # Byteplay basically plunders opcode and re-creates its exported names with
 # more information or different organization, which is discussed in the
-# comments below. Byteplay recreates two of opcode's globals,
-# opcode.opname and opcode.opmap, in a different form.
+# comments below.
 
 import opcode
 
