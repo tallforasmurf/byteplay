@@ -309,9 +309,9 @@ hascode = set([MAKE_FUNCTION, MAKE_CLOSURE])
 # first opcodes is (LOAD_CONST, <python code object>) where the constant
 # value is an entire code object, in effect a large byte array.
 #
-# The __str__() result of a CodeList is a formatted disassembly, one
-# line per bytecode joined by newlines. To print a disassembly, just
-# print(codelist), or store it as disassembly = str(codelist).
+# The __str__() result of a CodeList is a formatted disassembly as a list of
+# strings, one line per bytecode. The printcodelist() function writes the
+# list to a file.
 #
 # Internally to Python, a code object stores metadata about a bytestring and
 # has a member co_code which is that byte-string. In the same way, here, a
@@ -324,17 +324,11 @@ class CodeList(list):
     A list for storing opcode tuples that has a nicer __str__()
     result, in fact, a formatted assembly listing.
     """
+
     def __str__(self):
-        f = StringIO()
-        printcodelist(self, f)
-        return f.getvalue()
-
-# TODO: make this the body of CodeList.__str__ and remove it from __all__
-
-def printcodelist(codelist, to=sys.stdout):
-    """
-    Given a code list, print it nicely in multiple lines,
-    in the manner of dis.dis. Here is a random sample:
+        """
+    Convert the current contents into a nice disassembly in multiple
+    lines, in the manner of dis.dis. Here is a random sample:
 
     2           0 SETUP_LOOP              24 (to 27)
                 3 LOAD_FAST                0 (L)
@@ -342,75 +336,103 @@ def printcodelist(codelist, to=sys.stdout):
           >>    7 FOR_ITER                16 (to 26)
                10 STORE_FAST               1 (item)
 
-    The to= argument is some manner of file object, by
-    default stdout, but see the CodeList.__str__() method
-    which directs output to a StringIO.
-    """
+        """
+        output = [] # list of strings being created
 
-    # TODO: comment this better when understood
+        labeldict = {}
+        pendinglabels = []
+        # TODO SwearToGod I do not get this must study
+        for i, ( op, arg ) in enumerate( self ):
+            if isinstance(op, Label):
+                pendinglabels.append( op )
+            elif op is SetLineno:
+                pass
+            else:
+                while pendinglabels:
+                    labeldict[ pendinglabels.pop() ] = i
 
-    labeldict = {}
-    pendinglabels = []
-    for i, (op, arg) in enumerate(codelist):
-        if isinstance(op, Label):
-            pendinglabels.append(op)
-        elif op is SetLineno:
-            pass
-        else:
-            while pendinglabels:
-                labeldict[pendinglabels.pop()] = i
-
-    lineno = None
-    islabel = False
-    for i, (op, arg) in enumerate(codelist):
-        if op is SetLineno:
-            # This code item is a marker of a source line number, which is
-            # not a bytecode. Set up so that the NEXT opcode will display the
-            # line number in the left margin. Output a blank line here.
-            lineno = arg    # note line number value
-            print( file=to ) # insert the blank line
-            continue # the loop without printing
-
-        if isinstance(op, Label):
-            # This code item is a label marker, which is not a real Python
-            # bytecode. It doesn't display in the output but it does
-            # condition the NEXT opcode to have a ">>" marker.
-            islabel = True
-            continue # the loop without printing
-
-        # Set up the line number string to print to the left of this item. In
-        # case it was a line number, clear the flag.
-        linenostr =  str(lineno) if lineno else ''
         lineno = None
-
-        # Set up the ">>" jump-target marker if this code item is a target.
-        islabelstr = '>>' if islabel else ''
         islabel = False
+        for i, ( op, arg ) in enumerate( self ):
+            if op is SetLineno:
+                # This code item is a marker of a source line number, which is
+                # not a bytecode. Set up so that the NEXT opcode will display the
+                # line number in the left margin. Output a blank line here.
+                lineno = arg    # note line number value
+                output.append('') # insert the blank line
+                continue # the loop
 
-        # Set up the argument value to follow the opcode on the same line.
-        if op in hasconst:
-            # argument is const
-            argstr = repr(arg)
-        elif op in hasjump:
-            # argument is jump target
-            if arg in labeldict :
-                argstr = 'to ' + str(labeldict[arg])
-            else :
+            if isinstance(op, Label):
+                # This code item is a label marker, which is not a real Python
+                # bytecode. It doesn't display in the output but it does
+                # condition the NEXT opcode to have a ">>" marker.
+                islabel = True
+                continue # the loop without any output
+
+            # Set up the current line number, if any, or a null string, to
+            # print to the left of this item. In case it was a line number,
+            # clear the flag.
+            linenostr =  str(lineno) if lineno else ''
+            lineno = None
+
+            # Set up the ">>" jump-target marker if this code item is a
+            # target, and clear that flag.
+            islabelstr = '>>' if islabel else ''
+            islabel = False
+
+            # Set up the argument value to follow the opcode on the same line.
+            if op in hasconst:
+                # argument is const
                 argstr = repr(arg)
-        elif op in hasarg:
-            # argument is something
-            argstr = str(arg)
-        else:
-            # nope, no argument needed
-            argstr = ''
+            elif op in hasjump:
+                # argument is jump target
+                if arg in labeldict :
+                    argstr = 'to ' + str( labeldict[arg] )
+                else :
+                    argstr = repr( arg )
+            elif op in hasarg:
+                # argument is something
+                argstr = str( arg )
+            else:
+                # nope, no argument needed
+                argstr = ''
 
-        line = '%3s     %2s %4d %-20s %s' % (
-            linenostr,
-            islabelstr,
-            i,
-            op,
-            argstr)
-        print( line, file=to )
+            line = '%3s     %2s %4d %-20s %s' % (
+                linenostr,
+                islabelstr,
+                i,
+                op,
+                argstr
+            )
+            output.append( line )
+        return output
+
+def printcodelist(codelist, to=sys.stdout):
+    '''
+    Write the lines of the codelist string list to the given file, or to
+    the default output.
+
+    A little Python 3 problem: if the to-file is in binary mode, we need
+    to encode the strings, else a TypeError will be raised. Obvious
+    answer, test for 'b' in to.mode? Nope, only "real" file objects
+    have a mode member. StringIO objects, and the variant StringIO used
+    as default sys.stdout, do not have .mode.
+
+    However all file-like objects that support string output DO have
+    an encoding member. (StringIO has one that is an empty string, but
+    they have it.) So, if hasattr(to,'encoding'), just shove the whole
+    string into it. Otherwise, encode the string utf-8 and shove that
+    bytestring into it. (See? Python 3 not so hard...)
+
+    '''
+    # Get the whole disassembly as a string.
+    whole_thang = '\n'.join( str( codelist ) )
+    # if necessary, encode it to bytes
+    if not hasattr( to, 'encoding' ) :
+        whole_thang = whole_thang.encode( 'UTF-8' )
+    # send it on its way
+    to.write( whole_thang )
+
 
 # Besides real opcodes our CodeList object may feature two non-opcodes One is
 # the Set Line Number action, represented by a single global object of its
