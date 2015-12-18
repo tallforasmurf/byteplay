@@ -911,7 +911,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             else:
                 # Assemble the argument value from two bytes plus an extended
                 # arg when present.
-                arg = ord(co_code[i]) + ord(co_code[i+1])*256 + extended_arg
+                arg = co_code[i] + co_code[i+1]*256 + extended_arg
                 extended_arg = 0 # clear extended arg bits if any
                 i += 2 # Step over the argument
 
