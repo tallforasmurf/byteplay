@@ -177,7 +177,7 @@ import itertools # used for .izip()
 
 from array import array
 
-import types # used for CodeType only
+import types # used for CodeType and FunctionType
 
 import operator # names for standard operators such as __eq__
 
@@ -338,9 +338,12 @@ hascode = set( [ Opcode(MAKE_FUNCTION), Opcode(MAKE_CLOSURE) ] )
 # Code object (defined below) has metadata about a byte-string stored in a
 # CodeList.
 #
-
-# TODO: Move the build-from-code-string out of from_code into here as
-# the __init__ code. Stupid to do that down there not here.
+# Note that CodeList has no __init__(). It might seem like a logical move
+# to have its __init__() take a code bytestring and build itself, but
+# unfortunately a bytestring is not self-interpreting; it requires use
+# of other slots of a code object (code.lnotab etc). So the code that
+# constructs a CodeList is embedded inside the from_code() method.
+#
 
 class CodeList(list):
     """
@@ -462,9 +465,11 @@ def printcodelist(codelist, to=sys.stdout):
 # class (which is exported in __all__)...
 
 class SetLinenoType(object):
+    def __init__(self):
+        super().__init__()
+        self.__str__ = self.__repr__
     def __repr__(self):
         return 'SetLineno'
-    self.__str__ = self.__repr__
 
 SetLineno = SetLinenoType()
 
@@ -585,7 +590,7 @@ class _se_facts:
 
 _se = dict((op, getattr(_se_facts, opname[op]))
            for op in opcodes
-           if hasattr(_se, opname[op]))
+           if hasattr(_se_facts, opname[op]))
 
 # At this point, _se is a dict with 64 entries. Subtracting opcodes with
 # stack effects from the set of all opcodes produces the set which "has
@@ -823,9 +828,9 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
         """
         # grab the even bytes as integer byte_increments:
-        byte_increments = [ord(c) for c in code_object.co_lnotab[0::2]]
+        byte_increments = [c for c in code_object.co_lnotab[0::2]]
         # grab the odd bytes as integer line_increments:
-        line_increments = [ord(c) for c in code_object.co_lnotab[1::2]]
+        line_increments = [c for c in code_object.co_lnotab[1::2]]
 
         lineno = code_object.co_firstlineno
         addr = 0
@@ -870,7 +875,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
         while i < n:
             # First byte is the opcode
-            op = Opcode(ord(co_code[i]))
+            op = Opcode( co_code[i] )
 
             # If this op is a jump-target, insert (Label,) ahead of it.
             if i in labels:
@@ -1412,150 +1417,63 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
 # END OF Byteplay external API. Following are for test only.
 
-def recompile(filename):
-    """
-    Given a (presumably) Python source file filename, create a filename.pyc
-    file by disassembling filename and assembling it again.
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+#
 
-    Insert code at the top of the reassembled code that prints \"reassembled
-    'filename.py' imported\" to stderr when filename.pyc is executed.
-    """
-    # Much of the code here was based on the compile.py module.
-    import os
-    import imp
-    import marshal
-    import struct
+def recompile( function ) :
+    test_code_object = function.__code__
+    expanded_code = Code.from_code( test_code_object )
+    new_function = types.FunctionType(
+        code = expanded_code.to_code(),
+        globals = function.__globals__,
+        name = function.__name__,
+        argdefs = function.__defaults__,
+        closure = function.__closure__
+        )
+    return new_function
 
-    # Open the source file. Not checking for .py suffix, just assuming it is
-    # Python. If it isn't Python, there should be a syntax error later.
-    #
-    # Default encoding for Python source is UTF-8; if it isn't that or ASCII
-    # there will be surrogate chars that should cause a syntax error later.
 
-    f = open( filename, mode='r', encoding='UTF-8', errors='surrogateescape' )
-    codestring = f.read()
+# TODO: rewrite all test
+# def recompile( function )
+#    take a defined function, recompile its __code__, return it
+# def test_n(args)
+#    define 1 or more functions named test_1, test_2 etc
+# test_list = [ (test_n, arg1,... ),... ]
+#    list of test functions each with its needed args so that
+#        test_list[n][0](*test_list[n][1:])
+#    is a function invocation
+# main():
+#    loop executing as follows:
+#        try:
+#            result = test_list[n][0]( *test_list[n][1:] )
+#        except Exception as e:
+#            result = e # expected exception?
+#        try:
+#            modfun = recompile( test_list[n][0] )
+#            try:
+#                modresult = modfun( test_list[n][1:] )
+#            except Exception as e:
+#                modresult = e
+#            if result != modresult :
+#                print( 'test',n,'failed' )
+#        except Exception as e:
+#            print( 'exception doing recompile', e )
+#
+# TODO: write separate test program that imports byteplay3 and
+# recompiles source files in the manner of byteplay2.
 
-    # Get the modification timestamp of the input file. Using os.stat instead
-    # of os.fstat as they are equivalent in Py3.
-    #
-    # Not sure why the original has a guard against an Attribute error;
-    # os.stat, fileobject.fileno and stat_object.st_mtime all are documented.
-    #
-    # Replace long() casts with int() casts for Py3.
-
-    try:
-        timestamp = os.stat(f.fileno()).st_mtime
-    except AttributeError:
-        timestamp = os.stat(filename).st_mtime
-    timestamp = int( timestamp )
-
-    f.close()
-
-    # The following is removed because as of 3.2, compile() no longer
-    # requires a terminal newline.
-    #if codestring and codestring[-1] != '\n':
-        #codestring = codestring + '\n'
-
-    # Compile the source producing a code object. If it isn't valid
-    # Python 3, there should be a syntax error, which we diagnose.
-
-    try:
-        codeobject = compile(codestring, filename, 'exec')
-    except SyntaxError as E :
-        # Document the syntax error.
-        msg = "Skipping '{0}' - syntax error at line {1} col {2}".format(
-            E.filename, E.lineno, E.offset )
-        print( msg, file=sys.stderr )
-        return
-
-    # Apply BytePlay magic to make a code list to manipulate
-
-    cod = Code.from_code(codeobject)
-
-    # Modify the cod list to display a message when it runs.
-    # One supposes this message is checked by "make test"?
-
-    message = "reassembled %r imported.\n" % filename
-
-    # Insert code tuples meaning __import__('sys').stderr.write(message)
-
-    cod.code[:0] = [
-        (LOAD_GLOBAL, '__import__'),
-        (LOAD_CONST, 'sys'),
-        (CALL_FUNCTION, 1),
-        (LOAD_ATTR, 'stderr'),
-        (LOAD_ATTR, 'write'),
-        (LOAD_CONST, message),
-        (CALL_FUNCTION, 1),
-        (POP_TOP, None),
-        ]
-
-    # Reassemble the code list to a Python code object.
-
-    codeobject2 = cod.to_code()
-
-    # Write the .pyc file. Note this writes filename+c which yields
-    # "name.pyc" iff the input is name.py. But we didn't check for a .py
-    # suffix here. So if we get valid (or null) Python source in "name.txt"
-    # this creates "name.txtc".
-
-    fc = open(filename+'c', 'w+b')
-    fc.write('\0\0\0\0')
-    fc.write( struct.pack( '<l', timestamp ) )
-    marshal.dump(codeobject2, fc)
-    fc.flush()
-    fc.seek(0, 0)
-    # TODO convert to importlib.util.MAGIC_NUMBER
-    fc.write( imp.get_magic() )
-    fc.close()
-
-def recompile_all(path):
-    """
-    If path is a file, recompile it. If path is a directory, find all .py
-    files in path and recompile them.
-    """
-    import os
-    if os.path.isdir( path ):
-        for root, dirs, files in os.walk( path ):
-            for name in files:
-                if name.endswith( '.py' ) :
-                    filename = os.path.abspath( os.path.join( root, name ) )
-                    print( filename, file=sys.stderr )
-                    recompile( filename )
-    else:
-        filename = os.path.abspath(path)
-        recompile(filename)
+def test_0():
+    ''' minimal test case '''
+    a = 2
+    b = a/2
+    return b
 
 def main():
-    '''
-    Execute byteplay as a command on the command line.
 
-    Expects one argument which is a path to a folder of python code, or may
-    be a path to a single .py file.
+    new_test_0 = recompile( test_0 )
+    assert new_test_0() == test_0()
 
-    The purpose of this is to be able to test that
-    X==assemble(disassemble(X)) for all X.py in the directory.
 
-    TODO: Well, actually not, because recompile() actually adds code.
-    That's probably not a good idea, or at least, should be optional?
-    '''
-    import os
-    if len( sys.argv ) == 2 and os.path.exists( sys.argv[ 1 ] ) :
-        recompile_all(sys.argv[1])
-    else :
-        blurb = """\
-Usage: %s path-to-dir or path-to-file.py
-
-Search recursively for *.py in the given directory, disassemble and assemble
-each, adding a note when each file is imported.
-
-Use it to test byteplay like this:
-> byteplay.py Lib
-> make test
-
-Tip: before doing this, check to see which tests fail even without reassembling.
-"""
-        print( blurb.format( sys.argv[0] ) )
 
 if __name__ == '__main__':
     main()
