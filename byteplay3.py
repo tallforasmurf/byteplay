@@ -601,7 +601,7 @@ _se = dict((op, getattr(_se_facts, opname[op]))
 hasflow = opcodes - set(_se) - \
           set([CALL_FUNCTION, CALL_FUNCTION_VAR, CALL_FUNCTION_KW,
                CALL_FUNCTION_VAR_KW, BUILD_TUPLE, BUILD_LIST,
-               UNPACK_SEQUENCE, BUILD_SLICE, DUP_TOP_TWO,
+               UNPACK_SEQUENCE, BUILD_SLICE,
                RAISE_VARARGS, MAKE_FUNCTION, MAKE_CLOSURE])
 #if python_version == '2.7':
     #hasflow = hasflow - set([BUILD_SET])
@@ -658,8 +658,6 @@ def getse(op, arg=None):
         return 1, arg
     elif op == BUILD_SLICE:
         return arg, 1
-    elif op == DUP_TOP_TWO: # TODO: what does this really do?
-        return arg, arg*2
     elif op == RAISE_VARARGS:
         return 1+arg, 1
     elif op == MAKE_FUNCTION:
