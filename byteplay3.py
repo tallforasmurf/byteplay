@@ -523,6 +523,7 @@ class _se_facts:
     ROT_THREE = 3,3
     ROT_FOUR  = 4,4
     DUP_TOP   = 1,2
+    DUP_TOP_TWO = 2,4
 
     UNARY_POSITIVE = UNARY_NEGATIVE = UNARY_NOT = UNARY_CONVERT = \
         UNARY_INVERT = GET_ITER = LOAD_ATTR = 1,1
@@ -601,7 +602,7 @@ _se = dict((op, getattr(_se_facts, opname[op]))
 hasflow = opcodes - set(_se) - \
           set([CALL_FUNCTION, CALL_FUNCTION_VAR, CALL_FUNCTION_KW,
                CALL_FUNCTION_VAR_KW, BUILD_TUPLE, BUILD_LIST,
-               UNPACK_SEQUENCE, BUILD_SLICE,
+               UNPACK_SEQUENCE, BUILD_SLICE, DUP_TOP_TWO,
                RAISE_VARARGS, MAKE_FUNCTION, MAKE_CLOSURE])
 #if python_version == '2.7':
     #hasflow = hasflow - set([BUILD_SET])
@@ -658,6 +659,8 @@ def getse(op, arg=None):
         return 1, arg
     elif op == BUILD_SLICE:
         return arg, 1
+    elif op == DUP_TOP_TWO:
+        return arg, arg*2
     elif op == RAISE_VARARGS:
         return 1+arg, 1
     elif op == MAKE_FUNCTION:
