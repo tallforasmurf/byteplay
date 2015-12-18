@@ -136,8 +136,8 @@ __email__ = "davecortesi@gmail.com"
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # The __all__ global establishes the complete API of the module on import.
-# "from byteplay import *" imports these names (plus a bunch of opcode-names,
-# see below):
+# "from byteplay import *" imports these names, plus a bunch of names of
+# opcodes, and hence "import *" is not recommended!
 
 __all__ = ['cmp_op',
            'Code',
@@ -208,13 +208,13 @@ if sys.version_info[0] != 3 :
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # Define opcodes and information about them, basically extending the values
-# presented by module opcode. The global opname is established just below.
+# presented by module opcode. The global opname, mentioned in the Opcode
+# class definition, is established just below.
 #
 # In byteplay 2, Opcode.__repr__ is the same as __str__. However, __repr__()
 # is supposed to return a string that will recreate the object, right?
-# So I am changing it so that Opcode.__str__ --> the display name, but
-# Opcode.__repr__ --> "Opcode(n)". Query: should it instead return
-# "byteplay3.Opcode(n)"? But what if the user did "import byteplay3 as BP"?
+# So I am changing it so that Opcode.__str__() = the display name, but
+# Opcode.__repr__() = "Opcode(n)".
 
 class Opcode(int):
     """
@@ -231,18 +231,19 @@ class Opcode(int):
 
 # opcode.opmap is a dict of { "op_name" : op_int_value }. Here we make our
 # own opmap in which op_int_value is an Opcode object rather than a simple
-# int. Also, leave out 'EXTENDED_ARG'/144, which is apparently special as it
-# is listed seperately in opcode.py.
+# int. Also, leave out 'EXTENDED_ARG'/144, which is not really an opcode,
+# but merely a kludge that allows Python to encode argument values >2^16
+# in the opcode bytestream. See note on the CodeList class.
 
-opmap = dict( [ (name, Opcode(bytecode) )
-              for name, bytecode in opcode.opmap.items()
-              if name != 'EXTENDED_ARG'
-              ] )
+opmap = { name: Opcode( bytecode )
+          for name, bytecode in opcode.opmap.items()
+          if name != 'EXTENDED_ARG'
+        }
 
 # opname is the inverse of opmap, dict { op_int_value : "op_name" }.
 # (This is quite different from opcode.opname which is only a list.)
 
-opname = dict((bytecode, name) for name, bytecode in opmap.items())
+opname = { bytecode: name for name, bytecode in opmap.items() }
 
 # opcodes is a set of the keys of dict opname, hence of valid bytecode
 # values, for quick testing.
@@ -254,8 +255,6 @@ opcodes = set( opname.keys() )
 #
 # The names of these globals are also added to global __all__ (defined above)
 # so they are part of our API.
-#
-# TODO: Really? We need this? and need to export them in __all__?
 
 for name, code in opmap.items():
     globals()[name] = code
@@ -271,7 +270,7 @@ cmp_op = opcode.cmp_op
 # Make sets of Opcode objects that have particular properties. Each of these
 # "hasxxx" names is in our API __all__.
 #
-# Set of the opcodes that...
+# Define the set of the opcodes that...
 #
 # ... take a cmp_op as their argument (only COMPARE_OP):
 
@@ -310,11 +309,9 @@ haslocal = set(Opcode(x) for x in opcode.haslocal)
 
 hasfree = set(Opcode(x) for x in opcode.hasfree)
 
-# ..have a code object for argument
-# TODO: why not set(Opcode(x) for x in [MAKE_FUNCTION, MAKE_CLOSURE]) ?
-#       is it a problem that other sets are Opcodes and this is ints?
+# ..have a code object for their argument
 
-hascode = set([MAKE_FUNCTION, MAKE_CLOSURE])
+hascode = set( [ Opcode(MAKE_FUNCTION), Opcode(MAKE_CLOSURE) ] )
 
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -329,6 +326,8 @@ hascode = set([MAKE_FUNCTION, MAKE_CLOSURE])
 # constant, for example if a function defines an inner function, one of its
 # first opcodes is (LOAD_CONST, <python code object>) where the constant
 # value is an entire code object, in effect a large byte array.
+# N.B. where an EXTENDED_ARG opcode appears, the extra bits are gathered
+# into a single long int and the EXTENDED_ARG bytecode is dropped.
 #
 # The __str__() result of a CodeList is a formatted disassembly as a list of
 # strings, one line per bytecode. The printcodelist() function writes the
@@ -339,6 +338,9 @@ hascode = set([MAKE_FUNCTION, MAKE_CLOSURE])
 # Code object (defined below) has metadata about a byte-string stored in a
 # CodeList.
 #
+
+# TODO: Move the build-from-code-string out of from_code into here as
+# the __init__ code. Stupid to do that down there not here.
 
 class CodeList(list):
     """
