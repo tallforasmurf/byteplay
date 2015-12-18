@@ -969,18 +969,18 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         # constant is a string, Python assumes that's a docstring.
         docstring = None
         if code_object.co_consts and isinstance(code_object.co_consts[0], str):
-            docstring = co.co_consts[0]
+            docstring = code_object.co_consts[0]
 
         # Funnel all the collected bits through the Code.__init__() method.
         return cls(code = code,
-                   freevars = co.co_freevars,
+                   freevars = code_object.co_freevars,
                    args = args,
                    varargs = varargs,
                    varkwargs = varkwargs,
                    newlocals = newlocals,
-                   name = co.co_name,
-                   filename = co.co_filename,
-                   firstlineno = co.co_firstlineno,
+                   name = code_object.co_name,
+                   filename = code_object.co_filename,
+                   firstlineno = code_object.co_firstlineno,
                    docstring = docstring,
                    )
 
