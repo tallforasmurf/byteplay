@@ -1126,7 +1126,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 # label or SetLineno - just continue to next line
                 yield pos+1, curstack
 
-            elif op in (STOP_CODE, RETURN_VALUE, RAISE_VARARGS):
+            elif op in ( RETURN_VALUE, RAISE_VARARGS ):
                 # No place in particular to continue to
                 pass
 
