@@ -702,59 +702,41 @@ class Code(object):
     An object that holds all the information that a Python code object holds,
     but in an easy-to-play-with representation.
 
-    Code offers the following class methods:
+    Code offers the following class method:
 
     Code.from_code(code_object): analyzes a Python code object and returns
-    an instance of this class that has equivalent contents.
-
-    Code.to_code(Code_object): analyzes a Code object and returns a Python
-    code object with equivalent contents.
-
-TODO: analyze the relative benefits of having from_code() as a class method
-that calls Code.__init__() with the many pieces of a code object, versus
-having Code.__init__() take a whole code object and self-initializing.
-(Note that from_code() does recurse into itself when handling the argument of
-MAKE_FUNCTION and _CLOSURE bytecodes.)
-
-In byteplay2, Code.__init__() takes all the pieces of a code object; in this
-it kinda sorta mimics PyCodeNew() in codeobject.c, but the parallel is not
-close enough to be instructive.
+    an instance of Code class that has equivalent contents.
 
     The attributes of any Code object are:
 
-    Affecting action
-    ----------------
+    to_code()
+        analyzes the contents and returns a Python code object with
+        equivalent contents.
 
     code
-        the code as a list of (opcode, argument/None) tuples. The first item
-        is an opcode, or SetLineno, or a Label instance. The second item is
-        the argument, if applicable, or None. code can be a CodeList instance,
-        which will produce nicer output when printed.
-
-TODO: When "can" code be a CodeList and why not always?
+        the code as CodeList, a list of (opcode, argument/None) tuples. The
+        first item is an opcode, or SetLineno, or a Label instance. The
+        second item is the argument, if applicable, or None.
 
     freevars
-        list of strings, the free vars of the code: names
+        list of strings, the free vars of the code, that is, names
         of variables used in the function but not created in it.
 
     args
         list of strings, the names of arguments to a function.
 
     varargs
-        boolean: Does the function's arg list end with a '*args' argument.
+        boolean: Does the function's arg list end with a '*args' argument?
 
     varkwargs
-        boolean: Does the function's arg list end with a '**kwargs' argument
+        boolean: Does the function's arg list end with a '**kwargs' argument?
 
     newlocals
-        boolean: Should a new local namespace be created. (True in functions,
+        boolean: Should a new local namespace be created? (True in functions,
         False for module and exec code)
 
 TODO: should there be boolean values reflecting CO_GENERATOR,
 CO_COROUTINE and CO_ITERABLE_COROUTINE?
-
-    Not affecting action
-    --------------------
 
     name
         string: the name of the code, from co_name.
@@ -1255,10 +1237,11 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 # targets, and the stack recording is that of a raised
                 # exception, we can simply pop 1 object and let END_FINALLY
                 # pop the remaining 3.
-                if python_version == '2.7':
-                    yield pos+1, newstack(2)
-                else:
-                    yield pos+1, newstack(-1)
+                #if python_version == '2.7':
+                    #yield pos+1, newstack(2)
+                #else:
+                    #yield pos+1, newstack(-1)
+                yield pos+1, newstack(-1)
 
             else:
                 assert False, "Unhandled opcode: %r" % op
@@ -1280,7 +1263,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
     def to_code(self):
         """
-        Assemble a Python code object from a Code object.
+        Assemble a Python code object from this Code object.
         """
         co_argcount = len(self.args) - self.varargs - self.varkwargs
         co_stacksize = self._compute_stacksize()
