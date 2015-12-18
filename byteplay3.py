@@ -886,7 +886,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             if i in linestarts:
                 code.append((SetLineno, linestarts[i]))
 
-            i += 1 # index to the argument if any
+            i += 1 # step index to the argument if any
 
             # If this op has a code object as its argument (MAKE_FUNCTION or
             # _CLOSURE) then that code object should have been pushed on the
@@ -968,7 +968,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         # Preserve a docstring if any. If there are constants and the first
         # constant is a string, Python assumes that's a docstring.
         docstring = None
-        if code_object.co_consts and isinstance(code_object.co_consts[0], basestring):
+        if code_object.co_consts and isinstance(code_object.co_consts[0], str):
             docstring = co.co_consts[0]
 
         # Funnel all the collected bits through the Code.__init__() method.
