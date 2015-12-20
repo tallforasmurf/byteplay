@@ -514,6 +514,11 @@ class _se_facts:
     initializes his list of stack effects to all-(0,0) so need not
     specify any opcodes that have no stack effect).
 
+    n.b. it does no harm to leave in this list obsolete names
+    such as the SLICE_n which are not in Python 3. The code that uses
+    _se_facts queries it based on "op in opcodes" so obsolete ones will
+    not be queried.
+
     """
 
     NOP       = 0,0
@@ -559,9 +564,11 @@ class _se_facts:
         LOAD_CLOSURE = LOAD_DEREF = BUILD_MAP = 0,1
 
     DELETE_FAST = DELETE_GLOBAL = DELETE_NAME = 0,0
+    DELETE_DEREF = DELETE_NAME # Python 3
 
     EXEC_STMT = 3,0
     BUILD_CLASS = 3,1
+    LOAD_BUILD_CLASS = 0,1 # Python 3, my reading of ceval.c for this "target"
 
     STORE_MAP = MAP_ADD = 2,0
     SET_ADD = 1,0
@@ -584,6 +591,7 @@ class _se_facts:
         #LIST_APPEND = 1,0
     # assuming Python 3 same as 2.7 for these?
     YIELD_VALUE = 1,1
+    YIELD_FROM = YIELD_VALUE # Python 3 - I think I read ceval.c right...
     IMPORT_NAME = 2,1
     LIST_APPEND = 1,0
 
@@ -657,6 +665,11 @@ def getse(op, arg=None):
         return arg, 1
     elif op == UNPACK_SEQUENCE:
         return 1, arg
+    elif op == UNPACK_EX:
+        # Python 3 - it appears that UNPACK_EX does the same as
+        # UNPACK_SEQUENCE except for some value passed in the
+        # high 8 bits of the arg as "argcntafter"
+        return 1, arg & 255
     elif op == BUILD_SLICE:
         return arg, 1
     elif op == DUP_TOP_TWO:
@@ -1225,7 +1238,8 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 yield label_pos[arg], newstack(1)
                 yield pos+1, curstack + (0,)
 
-            elif python_version == '2.7' and op == SETUP_WITH:
+            # elif python_version == '2.7' and op == SETUP_WITH:
+            elif op == SETUP_WITH:
                 yield label_pos[arg], curstack
                 yield pos+1, newstack(-1) + (1,)
 
@@ -1233,7 +1247,10 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 # Just pop the block
                 yield pos+1, curstack[:-1]
 
-            elif op == END_FINALLY:
+            elif op == END_FINALLY or op == POP_EXCEPT:
+                # Python3 has POP_EXCEPT which executes UNWIND_EXCEPT_HANDLER
+                # just as END_FINALLY does, so I have added that to this branch.
+                #
                 # Since stack recording of SETUP_FINALLY targets is of 3 pushed
                 # objects (as when an exception is raised), we pop 3 objects.
                 yield pos+1, newstack(-3)
