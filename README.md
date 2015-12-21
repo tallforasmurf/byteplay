@@ -31,6 +31,10 @@ If you do not know enough about Python code objects and bytecode,
 you could do worse than audit Philip Guo's
 lectures on youtube
 (https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S).
+However, it is currently based on the code of Python2.7,
+and there are significant changes in Python 3.
+Still, it does walk you into the modules of CPython you need to read
+in order to understand code and function objects.
 
 See also the Byterun project (https://github.com/nedbat/byterun),
 which is a python bytecode executor written in Python.
