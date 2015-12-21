@@ -49,6 +49,8 @@ class Opcode(int):
     def __repr__(self):
         return opname[self]
     __str__ = __repr__
+dbg2 = Opcode(2)
+dbg3 = Opcode(3)
 
 class CodeList(list):
     """A list for storing opcode tuples - has a nicer __str__."""

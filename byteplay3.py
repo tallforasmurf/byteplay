@@ -15,6 +15,7 @@ Expected use:
 1. Only Python 3.x supported, cannot use under Python 2.
 2. Opcode.__repr__() has different output than Opcode.__str__()
 3. CodeList.__str__() value is a list of strings, not a single string
+   (but printcodelist() works as before).
 
 The following names are available from the module:
 
