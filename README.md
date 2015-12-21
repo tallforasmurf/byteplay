@@ -29,10 +29,18 @@ byteplay lets you easily play with existing bytecode and see what happens.
 
 If you do not know enough about Python code objects and bytecode,
 you could do worse than audit Philip Guo's
-lectures on youtube: https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S
+lectures on youtube
+(https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S).
 
-See also the Byterun project, https://github.com/nedbat/byterun,
+See also the Byterun project (https://github.com/nedbat/byterun),
 which is a python bytecode executor written in Python.
+
+For a different approach to building bytecode, see the Bytecode Assembler
+(https://pypi.python.org/pypi/BytecodeAssembler).
+
+For a different approach to tinkering with the contents of Python code,
+see the ASTRoid module (https://pypi.python.org/pypi/astroid/1.4.2).
+Unfortunately ASTroid is not documented at all.
 
 ## Why this fork?
 
