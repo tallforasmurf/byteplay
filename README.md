@@ -36,6 +36,11 @@ and there are significant changes in Python 3.
 Still, it does walk you into the modules of CPython you need to read
 in order to understand code and function objects.
 
+Python's own documentation is quite informative, in particular in the
+Python source distribution, the files Doc/library/dis.rst and
+Doc/library/inspect.rst (and the dis.py and inspect.py modules 
+themselves) explain a lot.
+
 See also the Byterun project (https://github.com/nedbat/byterun),
 which is a python bytecode executor written in Python.
 
