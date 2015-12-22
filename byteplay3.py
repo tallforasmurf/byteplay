@@ -13,9 +13,22 @@ Expected use:
             API CHANGES vs. byteplay 2 (original)
 
 1. Only Python 3.x supported, cannot use under Python 2.
+
 2. Opcode.__repr__() has different output than Opcode.__str__()
+
 3. CodeList.__str__() value is a list of strings, not a single string
    (but printcodelist() works as before).
+
+4. Function getse(Opcode, arg) ==>(pop_count,push_count) is removed. Partially
+   replaced by opcode.stack_effect(opcode, arg) ==> int, which is passed in
+   __all__. The reasons are, one, the latter is coded in C, and two, is
+   maintained as part of CPython, and three, this removes 200 lines
+   of obscure and tricky-to-maintain code from this module.
+
+   Note that this module contained only one use of getse and the tuple
+   (pop,push) was immedately reduced to a single int as push-pop, in other
+   words, the single int value returned by stack_effect().
+
 
 The following names are available from the module:
 
@@ -143,7 +156,6 @@ __email__ = "davecortesi@gmail.com"
 __all__ = ['cmp_op',
            'Code',
            'CodeList',
-           'getse',
            'hasarg',
            'hascode',
            'hascompare',
@@ -161,7 +173,8 @@ __all__ = ['cmp_op',
            'opname',
            'opcodes',
            'printcodelist',
-           'SetLineno'
+           'SetLineno',
+           'stack_effect'
            ]
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -192,6 +205,11 @@ import operator # names for standard operators such as __eq__
 # comments below.
 
 import opcode
+
+# Also, pass on the stack_effect() routine (which is actually implemented
+# in CPython Modules/_opcode.c) as part of our API.
+
+stack_effect = opcode.stack_effect
 
 # From the standard module dis grab this function, defined as "Detect all
 # offsets in a byte code which are jump targets. Return the list of offsets."
@@ -490,200 +508,6 @@ def isopcode(obj):
     Return whether obj is an opcode - not SetLineno or Label
     """
     return not isinstance(obj,SetLinenoType) and not isinstance(obj, Label)
-
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-#
-# Set up tools for knowing the stack behavior of opcodes.
-#
-# Create a dict _se in which the keys are Opcodes and the values are tuples
-# that show the effect of that operation on the stack.
-#
-# Each tuple in _se has two values. The first is the number of items that the
-# opcode pops (so the number that must be on the stack before). The second is
-# the number that it pushes (so, will be on the stack after).
-#
-# For example _se[POP_TOP] ==> (1,0), it pops one item, and pushes none.
-#
-
-class _se_facts:
-    """
-    A class used as a scratch-pad for making static definitions of the stack
-    effects of opcodes.
-
-    Taken from assembler.py by Phillip J. Eby
-    (and somewhat modified, for example adding NOP, because Eby
-    initializes his list of stack effects to all-(0,0) so need not
-    specify any opcodes that have no stack effect).
-
-    n.b. it does no harm to leave in this list obsolete names
-    such as the SLICE_n which are not in Python 3. The code that uses
-    _se_facts queries it based on "op in opcodes" so obsolete ones will
-    not be queried.
-
-    """
-
-    NOP       = 0,0
-
-    POP_TOP   = 1,0
-    ROT_TWO   = 2,2
-    ROT_THREE = 3,3
-    ROT_FOUR  = 4,4
-    DUP_TOP   = 1,2
-    DUP_TOP_TWO = 2,4
-
-    UNARY_POSITIVE = UNARY_NEGATIVE = UNARY_NOT = \
-        UNARY_INVERT = GET_ITER = LOAD_ATTR = 1,1
-
-    IMPORT_FROM = 1,2
-
-    BINARY_POWER = BINARY_MULTIPLY = BINARY_DIVIDE = BINARY_FLOOR_DIVIDE = \
-        BINARY_TRUE_DIVIDE = BINARY_MODULO = BINARY_ADD = BINARY_SUBTRACT = \
-        BINARY_SUBSCR = BINARY_LSHIFT = BINARY_RSHIFT = BINARY_AND = \
-        BINARY_XOR = BINARY_OR = COMPARE_OP = 2,1
-
-    INPLACE_POWER = INPLACE_MULTIPLY = INPLACE_DIVIDE = \
-        INPLACE_FLOOR_DIVIDE = INPLACE_TRUE_DIVIDE = INPLACE_MODULO = \
-        INPLACE_ADD = INPLACE_SUBTRACT = INPLACE_LSHIFT = INPLACE_RSHIFT = \
-        INPLACE_AND = INPLACE_XOR = INPLACE_OR = 2,1
-
-    SLICE_0, SLICE_1, SLICE_2, SLICE_3 = \
-        (1,1),(2,1),(2,1),(3,1)
-    STORE_SLICE_0, STORE_SLICE_1, STORE_SLICE_2, STORE_SLICE_3 = \
-        (2,0),(3,0),(3,0),(4,0)
-    DELETE_SLICE_0, DELETE_SLICE_1, DELETE_SLICE_2, DELETE_SLICE_3 = \
-        (1,0),(2,0),(2,0),(3,0)
-
-    STORE_SUBSCR = 3,0
-    DELETE_SUBSCR = STORE_ATTR = 2,0
-    DELETE_ATTR = STORE_DEREF = 1,0
-    PRINT_NEWLINE = 0,0
-    PRINT_EXPR = PRINT_ITEM = PRINT_NEWLINE_TO = IMPORT_STAR = 1,0
-    STORE_NAME = STORE_GLOBAL = STORE_FAST = 1,0
-    PRINT_ITEM_TO = 2,0
-
-    LOAD_LOCALS = LOAD_CONST = LOAD_NAME = LOAD_GLOBAL = LOAD_FAST = \
-        LOAD_CLOSURE = LOAD_DEREF = BUILD_MAP = 0,1
-
-    DELETE_FAST = DELETE_GLOBAL = DELETE_NAME = 0,0
-    DELETE_DEREF = DELETE_NAME # Python 3
-
-    EXEC_STMT = 3,0
-    BUILD_CLASS = 3,1
-    LOAD_BUILD_CLASS = 0,1 # Python 3, my reading of ceval.c for this "target"
-
-    STORE_MAP = MAP_ADD = 2,0
-    SET_ADD = 1,0
-
-    #if   python_version == '2.4': we don't support these
-        #YIELD_VALUE = 1,0
-        #IMPORT_NAME = 1,1
-        #LIST_APPEND = 2,0
-    #elif python_version == '2.5':
-        #YIELD_VALUE = 1,1
-        #IMPORT_NAME = 2,1
-        #LIST_APPEND = 2,0
-    #elif python_version == '2.6':
-        #YIELD_VALUE = 1,1
-        #IMPORT_NAME = 2,1
-        #LIST_APPEND = 2,0
-    #elif python_version == '2.7':
-        #YIELD_VALUE = 1,1
-        #IMPORT_NAME = 2,1
-        #LIST_APPEND = 1,0
-    # assuming Python 3 same as 2.7 for these?
-    YIELD_VALUE = 1,1
-    YIELD_FROM = YIELD_VALUE # Python 3 - I think I read ceval.c right...
-    IMPORT_NAME = 2,1
-    LIST_APPEND = 1,0
-
-# Now use the properties of _se_facts to create the _se dict.
-
-_se = dict((op, getattr(_se_facts, opname[op]))
-           for op in opcodes
-           if hasattr(_se_facts, opname[op]))
-
-# At this point, _se is a dict with 64 entries. Subtracting opcodes with
-# stack effects from the set of all opcodes produces the set which "has
-# flow", which I think means, can cause non-sequential execution.
-# TODO: does it? and if so why not hasflow==hasjump?
-#
-
-hasflow = opcodes - set(_se) - \
-          set([CALL_FUNCTION, CALL_FUNCTION_VAR, CALL_FUNCTION_KW,
-               CALL_FUNCTION_VAR_KW, BUILD_TUPLE, BUILD_LIST,
-               UNPACK_SEQUENCE, BUILD_SLICE, DUP_TOP_TWO,
-               RAISE_VARARGS, MAKE_FUNCTION, MAKE_CLOSURE])
-#if python_version == '2.7':
-    #hasflow = hasflow - set([BUILD_SET])
-hasflow = hasflow - set([BUILD_SET])
-
-# With all that set up, this function can return the (pop,push) stack
-# tuple for an opcode. In some cases the behavior depends on the argument.
-
-def getse(op, arg=None):
-    """
-
-    Get the stack effect of an opcode, as a (pop, push) tuple.
-
-    If an arg is needed and is not given, a ValueError is raised.
-    If op isn't a simple opcode, that is, the flow doesn't always continue
-    to the next opcode, a ValueError is raised.
-
-    """
-
-    # A number (64) of opcodes are already defined in the _se dict.
-
-    if op in _se :
-        return _se[op]
-
-    # Continue to opcodes with an effect that depends on arg
-
-    if arg is None:
-        raise ValueError("Opcode stack behaviour depends on arg")
-
-    # TODO: explain this
-
-    def get_func_tup(arg, nextra):
-        if arg > 0xFFFF:
-            raise ValueError("Can only split a two-byte argument")
-        return (nextra + 1 + (arg & 0xFF) + 2*((arg >> 8) & 0xFF),
-                1)
-
-    if op == CALL_FUNCTION:
-        return get_func_tup(arg, 0)
-    elif op == CALL_FUNCTION_VAR:
-        return get_func_tup(arg, 1)
-    elif op == CALL_FUNCTION_KW:
-        return get_func_tup(arg, 1)
-    elif op == CALL_FUNCTION_VAR_KW:
-        return get_func_tup(arg, 2)
-
-    elif op == BUILD_TUPLE:
-        return arg, 1
-    elif op == BUILD_LIST:
-        return arg, 1
-    elif op == BUILD_SET:
-        return arg, 1
-    elif op == UNPACK_SEQUENCE:
-        return 1, arg
-    elif op == UNPACK_EX:
-        # Python 3 - it appears that UNPACK_EX does the same as
-        # UNPACK_SEQUENCE except for some value passed in the
-        # high 8 bits of the arg as "argcntafter"
-        return 1, arg & 255
-    elif op == BUILD_SLICE:
-        return arg, 1
-    elif op == DUP_TOP_TWO:
-        return arg, arg*2
-    elif op == RAISE_VARARGS:
-        return 1+arg, 1
-    elif op == MAKE_FUNCTION:
-        return 1+arg, 1
-    elif op == MAKE_CLOSURE:
-        return 2+arg, 1
-    else:
-        raise ValueError("The opcode %r isn't recognized or has a special "\
-              "flow control" % op)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
@@ -1167,8 +991,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
             elif op not in hasflow:
                 # Simple change of stack
-                pop, push = getse(op, arg)
-                yield pos+1, newstack(push - pop)
+                yield pos+1, newstack( stack_effect( op, arg ) )
 
             elif op in (JUMP_FORWARD, JUMP_ABSOLUTE):
                 # One possibility for a jump

@@ -45,11 +45,44 @@ See also the Byterun project (https://github.com/nedbat/byterun),
 which is a python bytecode executor written in Python.
 
 For a different approach to building bytecode, see the Bytecode Assembler
-(https://pypi.python.org/pypi/BytecodeAssembler).
+(https://pypi.python.org/pypi/BytecodeAssembler) (but it only supports
+through 2.7).
 
 For a different approach to tinkering with the contents of Python code,
 see the ASTRoid module (https://pypi.python.org/pypi/astroid/1.4.2).
 Unfortunately ASTroid is not documented at all.
+
+## Changes from the original...
+
+I (tallforasmurf) am making the following changes in the API of
+byteplay3 as compared to the original.
+
+1. Only Python 3.x supported.
+
+2. Class `Opcode.__repr__()` has different output than `Opcode.__str__()`.
+   Previously they were identical; now `__repr__()` returns a string that
+   could reproduce the Opcode object.
+
+3. `CodeList.__str__()` result is now a list of strings.
+   Originally it returned a single big string of the disassembled bytecode
+   sequence; now it is a list of lines. The `printcodelist()` method works
+   as before to print a disassembly to a file or stdout.
+
+4. Function `getse(Opcode, arg) ==> (pop_count,push_count)` is removed.
+   It is at least partially
+   replaced by `opcode.stack_effect(opcode, arg) ==> net_stack_change_int`,
+   which is passed in `__all__`.
+   The reasons are, one, the latter is coded in C; two, it is
+   maintained as part of CPython; and three, this removes 200 lines
+   of obscure and tricky-to-maintain code from this module.
+
+   Note that byteplay contained only one use of `getse()` and its output tuple
+   was immedately reduced to a single int as `push-pop`, in other
+   words, to the single int value returned by `stack_effect()`.
+   If somebody needs the (pop,push) tuple result, you can get the original
+   from BytecodeAssembler linked above, and update it to Python 3.
+
+
 
 ## Why this fork?
 
