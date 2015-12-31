@@ -27,30 +27,40 @@ byteplay lets you easily play with existing bytecode and see what happens.
 
 ## More info...
 
-If you do not know enough about Python code objects and bytecode,
-you could do worse than audit Philip Guo's
-lectures on youtube
-(https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S).
-However, it is currently based on the code of Python2.7,
-and there are significant changes in Python 3.
-Still, it does walk you into the modules of CPython you need to read
-in order to understand code and function objects.
+If you want to know more about Python code objects and bytecode,
+the following blog series and video lectures are good orientations
+to CPython internals:
 
-Python's own documentation is quite informative, in particular in the
-Python source distribution, the files Doc/library/dis.rst and
-Doc/library/inspect.rst (and the dis.py and inspect.py modules 
-themselves) explain a lot.
+* Philip Guo's lecture series on Python internals takes you into every 
+  important module of the CPython source:
+  https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S
+  Unfortunately that series is based on Python 2.7.
 
-See also the Byterun project (https://github.com/nedbat/byterun),
-which is a python bytecode executor written in Python.
+* Much the same ground is covered for Python 3.2 and in a very condensed
+  way by Larry Hastings' "Architectural Tour" talk: 
+  https://www.youtube.com/watch?v=XGF3Qu4dUqk
 
-For a different approach to building bytecode, see the Bytecode Assembler
-(https://pypi.python.org/pypi/BytecodeAssembler) (but it only supports
-through 2.7).
+* Yanin Akniv's tour of bytecode execution and other topics:
+  http://tech.blog.aknin.name/2010/04/02/pythons-innards-introduction/
 
-For a different approach to tinkering with the contents of Python code,
-see the ASTRoid module (https://pypi.python.org/pypi/astroid/1.4.2).
-Unfortunately ASTroid is not documented at all.
+* Eli Benderski's notes on internals:
+  http://eli.thegreenplace.net/tag/python-internals
+
+* Brett Cannon's talk on how CPython compiles source to bytecode:
+  https://www.youtube.com/watch?v=R31NRWgoIWM
+
+* Ryan Kelly's short talk "Bytecode: What, Why, and How to Hack it":
+  https://www.youtube.com/watch?v=ve7lLHtJ9l8
+
+* In the CPython source distro, see the files Doc/library/dis.rst and
+  Doc/library/inspect.rst, then read the dis.py and inspect.py modules 
+  themselves.
+
+* The Byterun project (https://github.com/nedbat/byterun) is a Python
+  bytecode executor written in Python.
+
+See also the Bytecode Assembler and the ASTRoid modules on pypi,
+but neither is well-documented and they aren't updated to Python 3.
 
 ## Changes from the original...
 
