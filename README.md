@@ -31,6 +31,10 @@ If you want to know more about Python code objects and bytecode,
 the following blog series and video lectures are good orientations
 to CPython internals:
 
+* Ryan Kelly's short talk "Bytecode: What, Why, and How to Hack it",
+  https://www.youtube.com/watch?v=ve7lLHtJ9l8, contains a demonstration
+  of using BytePlay!
+
 * Philip Guo's lecture series on Python internals takes you into every 
   important module of the CPython source:
   https://www.youtube.com/playlist?list=PLzV58Zm8FuBL6OAv1Yu6AwXZrnsFbbR0S
@@ -48,9 +52,6 @@ to CPython internals:
 
 * Brett Cannon's talk on how CPython compiles source to bytecode:
   https://www.youtube.com/watch?v=R31NRWgoIWM
-
-* Ryan Kelly's short talk "Bytecode: What, Why, and How to Hack it":
-  https://www.youtube.com/watch?v=ve7lLHtJ9l8
 
 * In the CPython source distro, see the files Doc/library/dis.rst and
   Doc/library/inspect.rst, then read the dis.py and inspect.py modules 
