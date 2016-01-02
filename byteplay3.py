@@ -103,10 +103,10 @@ The following names are available from the module:
 
     Functions:
 
-        getse( opcode, arg=None )
+        stack_effect( opcode, arg=None )
             given an opcode number and the opcode's argument if any,
-            return the stack effect of that opcode as a (pop_item_count,
-            push_item_count) tuple.            .
+            return the stack effect of that opcode as an int, e.g.
+            stack_effect( POP_TOP, None ) ==> -1
 
         isopcode( opcode )
             true when opcode is a Python-defined opcode and not one
@@ -563,7 +563,11 @@ class Code(object):
         second item is the argument, if applicable, or None.
 
     freevars
-        list of strings, the free vars of the code, that is, names
+        list of strings, names of "free" vars of the code. Technically a "free"
+        variable should be one that is used in the code but not defined in it.
+        In CPython terminology it is one that is used in this code and known
+        to be defined in an enclosing scope = outer function.
+        Global
         of variables used in the function but not created in it.
 
     args
