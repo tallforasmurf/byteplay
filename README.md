@@ -46,6 +46,7 @@ to CPython internals:
 
 * Yanin Akniv's tour of bytecode execution and other topics:
   http://tech.blog.aknin.name/2010/04/02/pythons-innards-introduction/
+  is well worth reading especially on the contents of a code object.
 
 * Eli Benderski's notes on internals:
   http://eli.thegreenplace.net/tag/python-internals
@@ -63,6 +64,27 @@ to CPython internals:
 See also the Bytecode Assembler and the ASTRoid modules on pypi,
 but neither is well-documented and they aren't updated to Python 3.
 
+## Why this fork?
+
+I (tallforasmurf) would like to play with byteplay on Python 3,
+which the original does not support.
+I've made this fork (by export from code.google.com)
+to investigate the possibility of converting it to Python 3.
+
+The file byteplay3.py is my edited version for Python 3.
+**At this time byteplay3 is a work in progress**.
+
+The file byteplay.py is the original code by Noah.
+It supports Python 2.7 and before.
+It is probably identical to the code available on pypi (linked above)
+but you should not depend on that.
+Get the original when working with Python 2.x.
+
+TODO: When/if byteplay works with Python3,
+Ryan Kelly's Promise package (https://github.com/rfk/promise/)
+which is based on byteplay,
+could also be brought to Python 3, and possibly extended.
+
 ## Changes from the original...
 
 I (tallforasmurf) am making the following changes in the API of
@@ -72,7 +94,7 @@ byteplay3 as compared to the original.
 
 2. Class `Opcode.__repr__()` has different output than `Opcode.__str__()`.
    Previously they were identical; now `__repr__()` returns a string that
-   could reproduce the Opcode object.
+   could be eval'd to reproduce the Opcode object (if "Opcode" is defined).
 
 3. `CodeList.__str__()` result is now a list of strings.
    Originally it returned a single big string of the disassembled bytecode
@@ -94,23 +116,5 @@ byteplay3 as compared to the original.
    from BytecodeAssembler linked above, and update it to Python 3.
 
 
-
-## Why this fork?
-
-I (tallforasmurf) would like to play with byteplay on Python 3,
-which the original does not support.
-I've made this fork (by export from code.google.com)
-to investigate the possibility of converting it to Python 3.
-
-The file byteplay.py is the original code by Noah.
-It supports Python 2.7 and before.
-
-The file byteplay3.py is my edited version for Python 3.
-**At this time byteplay3 is a work in progress**.
-
-When/if byteplay works with Python3,
-then Ryan Kelly's Promise package (https://github.com/rfk/promise/)
-which is based on byteplay,
-could also be brought to Python 3, and possibly extended.
 
 
