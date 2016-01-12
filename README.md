@@ -92,28 +92,26 @@ byteplay3 as compared to the original.
 
 1. Only Python 3.x supported.
 
-2. Class `Opcode.__repr__()` has different output than `Opcode.__str__()`.
+2. Class `Opcode.\_\_repr\_\_()` has different output than `Opcode.\_\_str\_\_()`.
    Previously they were identical; now `__repr__()` returns a string that
    could be eval'd to reproduce the Opcode object (if "Opcode" is defined).
 
-3. `CodeList.__str__()` result is now a list of strings.
+3. `CodeList.\_\_str\_\_()` result is now a list of strings.
    Originally it returned a single big string of the disassembled bytecode
    sequence; now it is a list of lines. The `printcodelist()` method works
    as before to print a disassembly to a file or stdout.
 
-4. Function `getse(Opcode, arg) ==> (pop_count,push_count)` is removed.
-   It is at least partially
-   replaced by `opcode.stack_effect(opcode, arg) ==> net_stack_change_int`,
-   which is passed in `__all__`.
-   The reasons are, one, the latter is coded in C; two, it is
-   maintained as part of CPython; and three, this removes 200 lines
-   of obscure and tricky-to-maintain code from this module.
+4. I have added `stack\_effect(Opcode, arg) ==> net\_stack\_change\_int`,
+   from the opcode module, which is passed in `\_\_all\_\_`.
+   This stack effect routine is in fact the CPython routine from compile.c.
+   As such it is fast, and maintained as part of CPython.
 
-   Note that byteplay contained only one use of `getse()` and its output tuple
-   was immedately reduced to a single int as `push-pop`, in other
-   words, to the single int value returned by `stack_effect()`.
-   If somebody needs the (pop,push) tuple result, you can get the original
-   from BytecodeAssembler linked above, and update it to Python 3.
+5. The function `getse(Opcode, arg) ==> (pop\_count\_int,push\_count\_int)`
+   from byteplay2 is changed. Formerly it used a bunch of code modified from the
+   Bytecode Assembler. Now it returns a minimal result based on calling
+   stack\_effect(). The returned tuple will at least sometimes not be the
+   same as in byteplay2, although the net of push\_count-pop\_count will
+   be correct.
 
 
 

@@ -108,6 +108,12 @@ The following names are available from the module:
             return the stack effect of that opcode as an int, e.g.
             stack_effect( POP_TOP, None ) ==> -1
 
+        getse( Opcode, arg=None )
+            a fake entry point to keep old code that depends on the
+            byteplay2 API from breaking; returns a valid tuple
+            (pop_count, push_count) based on stack_effect, but not
+            the same values as byteplay2 would have returned.
+
         isopcode( opcode )
             true when opcode is a Python-defined opcode and not one
             of the two convenience values Label and SetLineno.
@@ -156,6 +162,7 @@ __email__ = "davecortesi@gmail.com"
 __all__ = ['cmp_op',
            'Code',
            'CodeList',
+           'getse',
            'hasarg',
            'hascode',
            'hascompare',
@@ -205,31 +212,6 @@ import operator # names for standard operators such as __eq__
 # comments below.
 
 import opcode
-
-# Also, pass on the stack_effect() routine (which is actually implemented
-# in CPython Modules/_opcode.c) as part of our API.
-#
-# Reading the code of compile.c:PyCompile_OpcodeStackEffect() it handles
-# every defined opcode except two: NOP and EXTENDED_ARG. NOP is possible
-# as a place-holder, so handle it here. EXTENDED_ARG is not a real opcode
-# and should not get queried in this way.
-#
-# Also the CPython code only looks at args that are ints, so if the actual
-# arg is, e.g., a string (as it might be for, e.g. LOAD_FAST), pass it as
-# a zero.
-
-def stack_effect( op, arg ):
-    if op == NOP :
-        return 0
-    passed_arg = None
-    if op in hasarg and arg is not None :
-        try:
-            passed_arg = int( arg )
-        except:
-            passed_arg = 0
-    if op != opcode.EXTENDED_ARG :
-        return opcode.stack_effect( op, passed_arg )
-    raise ValueError( 'Attempt to get stack effect of EXTENDED_ARG' )
 
 # From the standard module dis grab this function, defined as "Detect all
 # offsets in a byte code which are jump targets. Return the list of offsets."
@@ -351,6 +333,41 @@ hasfree = set(Opcode(x) for x in opcode.hasfree)
 # ..have a code object for their argument
 
 hascode = set( [ Opcode(MAKE_FUNCTION), Opcode(MAKE_CLOSURE) ] )
+
+# Pass on the opcode.stack_effect() routine (which is actually implemented
+# in CPython Modules/_opcode.c) as part of our API.
+#
+# Reading the code of compile.c:PyCompile_OpcodeStackEffect() it handles
+# every defined opcode except two: NOP and EXTENDED_ARG. NOP is possible
+# as a place-holder, so handle it here. EXTENDED_ARG is not a real opcode
+# and should not get queried in this way.
+#
+# Also the CPython code only looks at args that are ints, so if the actual
+# arg is, e.g., a string (as it might be for, e.g. LOAD_FAST), pass it as
+# a zero.
+
+def stack_effect( op, arg ):
+    if op == opcode.EXTENDED_ARG or not op in opcodes :
+        raise ValueError( 'Attempt to get stack effect of invalid opcode' )
+    if op == NOP :
+        return 0
+    passed_arg = None
+    if op in hasarg and arg is not None :
+        try:
+            passed_arg = int( arg )
+        except:
+            # arg not an int, compile.c doesn't care about it
+            passed_arg = 0
+    return opcode.stack_effect( op, passed_arg )
+
+def getse( op, arg ):
+    net_change = stack_effect( op, arg )
+    if net_change < 0 :
+        # op pops more than it pushes so...
+        return ( abs( net_change ), 0 )
+    else :
+        # op pushes the same or more than it pops, so...
+        return ( 0, net_change )
 
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
