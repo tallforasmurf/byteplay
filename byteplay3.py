@@ -208,8 +208,28 @@ import opcode
 
 # Also, pass on the stack_effect() routine (which is actually implemented
 # in CPython Modules/_opcode.c) as part of our API.
+#
+# Reading the code of compile.c:PyCompile_OpcodeStackEffect() it handles
+# every defined opcode except two: NOP and EXTENDED_ARG. NOP is possible
+# as a place-holder, so handle it here. EXTENDED_ARG is not a real opcode
+# and should not get queried in this way.
+#
+# Also the CPython code only looks at args that are ints, so if the actual
+# arg is, e.g., a string (as it might be for, e.g. LOAD_FAST), pass it as
+# a zero.
 
-stack_effect = opcode.stack_effect
+def stack_effect( op, arg ):
+    if op == NOP :
+        return 0
+    passed_arg = None
+    if op in hasarg and arg is not None :
+        try:
+            passed_arg = int( arg )
+        except:
+            passed_arg = 0
+    if op != opcode.EXTENDED_ARG :
+        return opcode.stack_effect( op, passed_arg )
+    raise ValueError( 'Attempt to get stack effect of EXTENDED_ARG' )
 
 # From the standard module dis grab this function, defined as "Detect all
 # offsets in a byte code which are jump targets. Return the list of offsets."
@@ -335,40 +355,49 @@ hascode = set( [ Opcode(MAKE_FUNCTION), Opcode(MAKE_CLOSURE) ] )
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
-# A CodeList is an expanded version of a Python code byte-string.
-#
-# The contents of a CodeList is a series of tuples (Opcode, argument) where
-# Opcode is an Opcode object based on the bytecode, and argument is either
-# None or the actual argument value of the opcode.
-#
-# Argument values are typically integers, but they can be any type of
-# constant, for example if a function defines an inner function, one of its
-# first opcodes is (LOAD_CONST, <python code object>) where the constant
-# value is an entire code object, in effect a large byte array.
-# N.B. where an EXTENDED_ARG opcode appears, the extra bits are gathered
-# into a single long int and the EXTENDED_ARG bytecode is dropped.
-#
-# The __str__() result of a CodeList is a formatted disassembly as a list of
-# strings, one line per bytecode. The printcodelist() function writes the
-# list to a file.
-#
-# Internally to Python, a code object stores metadata about a bytestring and
-# has a member co_code which is that byte-string. In the same way, here, a
-# Code object (defined below) has metadata about a byte-string stored in a
-# CodeList.
-#
-# Note that CodeList has no __init__(). It might seem like a logical move
-# to have its __init__() take a code bytestring and build itself, but
-# unfortunately a bytestring is not self-interpreting; it requires use
-# of other slots of a code object (code.lnotab etc). So the code that
-# constructs a CodeList is embedded inside the from_code() method.
-#
 
 class CodeList(list):
     """
-    A list for storing opcode tuples that has a nicer __str__()
-    result, in fact, a formatted assembly listing.
+A CodeList is an expanded version of a Python code byte-string.
+
+The contents of a CodeList is a series of tuples (Opcode, argument) where
+Opcode is an Opcode object based on the bytecode, and argument is either
+None or the actual argument value of the opcode.
+
+Argument values are typically integers, but they can be Python type at all.
+For example if a function defines an inner function, one of its first opcodes
+is (LOAD_CONST, <python code object>) where the constant value is an entire
+code object, in effect a large byte array. The from_code() method recursively
+encodes such values as nested Code objects.
+
+In an actual bytecode string, opcode arguments are represented as indexes
+into a tuple of constants. In a CodeList, the actual argument constant values
+are present in the tuple, not an index.
+
+Also in an actual bytecode string, an integer argument that does not fit in
+16 bits is represented as a sequence of 1 or more EXTENDED_ARG opcodes. In
+the CodeList, the extra bits are gathered into a single long int and the
+EXTENDED_ARG bytecode is dropped.
+
+The __str__() result of a CodeList is a formatted disassembly as a list of
+strings, one line per bytecode. The printcodelist() function writes the
+list to a file (or stdout).
+
+Note that CodeList __init__ method exists (to set self.changed=False) but any
+argument is passed on to the parent list class. Normally there is no
+argument, just x=CodeList(). It might seem like a logical move to have the
+__init__() take a code bytestring and build itself, but unfortunately a
+bytestring is not self-interpreting; it requires use of other slots of a code
+object (code.lnotab etc). So the code that constructs a CodeList is embedded
+inside the from_code() method.
+
+CodeList is a derivative of a standard list class. The only override of
+normal list behavior is the __str__() function.
+
     """
+    def __init__( self, *args ):
+        super().__init__( *args )
+        self.changed = False
 
     def __str__(self):
         """
@@ -457,17 +486,17 @@ def printcodelist(codelist, to=sys.stdout):
     Write the lines of the codelist string list to the given file, or to
     the default output.
 
-    A little Python 3 problem: if the to-file is in binary mode, we need
-    to encode the strings, else a TypeError will be raised. Obvious
-    answer, test for 'b' in to.mode? Nope, only "real" file objects
-    have a mode member. StringIO objects, and the variant StringIO used
-    as default sys.stdout, do not have .mode.
+    A little Python 3 problem: if the to-file is in binary mode, we need to
+    encode the strings, else a TypeError will be raised. Obvious answer, test
+    for 'b' in to.mode? Nope, only "real" file objects have a mode attribute.
+    StringIO objects, and the variant StringIO used as default sys.stdout, do
+    not have .mode.
 
-    However all file-like objects that support string output DO have
-    an encoding member. (StringIO has one that is an empty string, but
-    they have it.) So, if hasattr(to,'encoding'), just shove the whole
-    string into it. Otherwise, encode the string utf-8 and shove that
-    bytestring into it. (See? Python 3 not so hard...)
+    However, all file-like objects that support string output DO have an
+    encoding attribute. (StringIO has one that is an empty string, but it
+    exists.) So, if hasattr(to,'encoding'), just shove the whole string into
+    it. Otherwise, encode the string utf-8 and shove that bytestring into it.
+    (See? Python 3 not so hard...)
 
     '''
     # Get the whole disassembly as a string.
@@ -522,14 +551,13 @@ def isopcode(obj):
 
 CO_OPTIMIZED              = 0x0001      # use LOAD/STORE_FAST instead of _NAME
 CO_NEWLOCALS              = 0x0002      # only cleared for module/exec code
-CO_VARARGS                = 0x0004
-CO_VARKEYWORDS            = 0x0008
+CO_VARARGS                = 0x0004      # signature contains *arg
+CO_VARKEYWORDS            = 0x0008      # signature contains **kwargs
 CO_NESTED                 = 0x0010      # ???
-CO_GENERATOR              = 0x0020
+CO_GENERATOR              = 0x0020      # func contains "yield" opcode
 CO_NOFREE                 = 0x0040      # quick test for "no free or cell vars"
-#TODO integrate CO_COROUTINE and CO_ITERABLE_COROUTINE in from_code(), to_code()
 CO_COROUTINE              = 0x0080      # func created with "async def"
-CO_ITERABLE_COROUTINE     = 0x0100
+CO_ITERABLE_COROUTINE     = 0x0100      # async def func has "yield"
 # The following flags are no longer used as of 3.4
 CO_GENERATOR_ALLOWED      = 0x1000      # unused
 CO_FUTURE_DIVISION        = 0x2000
@@ -558,33 +586,37 @@ class Code(object):
         equivalent contents.
 
     code
-        the code as CodeList, a list of (opcode, argument/None) tuples. The
-        first item is an opcode, or SetLineno, or a Label instance. The
-        second item is the argument, if applicable, or None.
+        the code as CodeList; see class CodeList above.
 
     freevars
         list of strings, names of "free" vars of the code. Technically a "free"
         variable should be one that is used in the code but not defined in it.
         In CPython terminology it is one that is used in this code and known
         to be defined in an enclosing scope = outer function.
-        Global
-        of variables used in the function but not created in it.
 
     args
         list of strings, the names of arguments to a function.
 
     varargs
-        boolean: Does the function's arg list end with a '*args' argument?
+        boolean: Does the function's arg list contain a '*args' argument?
 
     varkwargs
         boolean: Does the function's arg list end with a '**kwargs' argument?
+
+    kwonlyargcount
+        int: the count of keyword-only arguments (those that followed the
+        *args in the signature of the def statement).
 
     newlocals
         boolean: Should a new local namespace be created? (True in functions,
         False for module and exec code)
 
-TODO: should there be boolean values reflecting CO_GENERATOR,
-CO_COROUTINE and CO_ITERABLE_COROUTINE?
+    coflags
+        int: the original co_flags value of the code object given to
+        from_code(). Can be interrogated for CO_COROUTINE, CO_GENERATOR,
+        CO_ITERABLE_COROUTINE, CO_OPTIMIZED. If to_code() finds that
+        the code list is unchanged since from_code() built it, these
+        flags are reproduced in the output.
 
     name
         string: the name of the code, from co_name.
@@ -601,19 +633,33 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
     """
 
-    # Possibly somebody creates a Code object by calling Code() with
-    # all these values. More likely, the class method from_code() below
-    # is used. It takes a code object apart to find all these things
-    # and creates the Code object from the parts.
+    # Usually a Code object is created by the class method from_code() below.
+    # However you can create one directly by supplying at least a CodeList.
+    # Due to the substantial argument list, this, like the code object
+    # itself, is "not for the faint of heart".
 
-    def __init__(self, code, freevars, args, varargs, varkwargs, newlocals,
-                 name, filename, firstlineno, docstring):
+    def __init__(self,
+                 code,
+                 freevars = [],
+                 args = [],
+                 varargs = False,
+                 varkwargs = False,
+                 kwonlyargcount = 0,
+                 newlocals = False,
+                 coflags = 0x00,
+                 name = '',
+                 filename = '',
+                 firstlineno = 1,
+                 docstring = ''
+                 ) :
         self.code = code
         self.freevars = freevars
         self.args = args
         self.varargs = varargs
         self.varkwargs = varkwargs
+        self.kwonlyargcount = kwonlyargcount
         self.newlocals = newlocals
+        self.coflags = coflags
         self.name = name
         self.filename = filename
         self.firstlineno = firstlineno
@@ -688,6 +734,8 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
     def from_code(cls, code_object):
         """
         Disassemble a Python code object and make a Code object from the bits.
+        This is the expected way to make a Code instance. But you are welcome
+        to call Code() directly if you wish.
         """
         # get the actual bytecode string out of the code object
         co_code = code_object.co_code
@@ -709,7 +757,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
         # Create a CodeList object to represent the bytecode string.
 
-        code = CodeList()
+        code = list()       # ordinary list receives (op,arg) tuples
         n = len(co_code)    # number bytes in the bytecode string
         i = 0               # index over the bytecode string
         extended_arg = 0    # upper 16 bits of an extended arg
@@ -794,19 +842,29 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                     # whatever, just put the arg in the tuple
                     code.append((op, arg))
 
-        # Store flags from the code object as booleans.
-        # TODO: why do we not preserve the other names?
-        # CO_OPTIMIZED, CO_VARKEYWORDS, CO_NESTED, CO_GENERATOR, CO_NOFREE, CO_COROUTINE, CO_ITERABLE_COROUTINE
-        # (the latter two are 3.5 adds). Or at least, store co_flags itself
+        # Convert the code list into a CodeList. Do this in a single step so that
+        # code.changed==False.
+
+        code = CodeList( code )
+
+        # Store certain flags from the code object as booleans for convenient
+        # reference as Code members.
+
         varargs = bool(code_object.co_flags & CO_VARARGS)
         varkwargs = bool(code_object.co_flags & CO_VARKEYWORDS)
         newlocals = bool(code_object.co_flags & CO_NEWLOCALS)
 
         # Get the names of arguments as strings, from the varnames tuple. The
-        # order of name strings is the names of regular arguments, then the
-        # name of a *arg if any, then the name of a **arg if any, followed by
-        # the names of locals.
-        args = code_object.co_varnames[:code_object.co_argcount + varargs + varkwargs]
+        # order of name strings in co_varnames is:
+        #   names of regular (positional-or-keyword) arguments
+        #   names of keyword-only arguments if any
+        #   name of a *vararg argument
+        #   name of a **kwarg argument if any (not present if kwonlyargs > 0)
+        #   names of other local variables
+        # Hence the count of argument names is
+        #   co_argcount + co_kwonlyargcount + varargs + varkwargs
+        nargs = code_object.co_argcount + code_object.co_kwonlyargcount + varargs + varkwargs
+        args = code_object.co_varnames[ : nargs ]
 
         # Preserve a docstring if any. If there are constants and the first
         # constant is a string, Python assumes that's a docstring.
@@ -815,26 +873,31 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             docstring = code_object.co_consts[0]
 
         # Funnel all the collected bits through the Code.__init__() method.
-        return cls(code = code,
-                   freevars = code_object.co_freevars,
-                   args = args,
-                   varargs = varargs,
-                   varkwargs = varkwargs,
-                   newlocals = newlocals,
-                   name = code_object.co_name,
-                   filename = code_object.co_filename,
-                   firstlineno = code_object.co_firstlineno,
-                   docstring = docstring,
-                   )
+        return cls( code = code,
+                    freevars = code_object.co_freevars,
+                    args = args,
+                    varargs = varargs,
+                    varkwargs = varkwargs,
+                    kwonlyargcount = code_object.co_kwonlyargcount,
+                    newlocals = newlocals,
+                    coflags = code_object.co_flags,
+                    name = code_object.co_name,
+                    filename = code_object.co_filename,
+                    firstlineno = code_object.co_firstlineno,
+                    docstring = docstring
+                    )
 
     # Define equality between Code objects the same way that codeobject.c
     # implements the equality test, by ORing the inequalities of each part.
+    # If all attributes are equal, then test the individual tuples of the
+    # two CodeList objects.
 
     def __eq__(self, other):
         if (self.freevars != other.freevars or
             self.args != other.args or
             self.varargs != other.varargs or
             self.varkwargs != other.varkwargs or
+            self.kwonlyargcount != other.kwonlyargcount or
             self.newlocals != other.newlocals or
             self.name != other.name or
             self.filename != other.filename or
@@ -844,7 +907,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             ):
             return False
 
-        # Compare code. For codeobject.c this is a comparison of two
+        # Compare code. For codeobject.c this would be a comparison of two
         # bytestrings, but this is harder because of extra info, e.g. labels
         # should be matching, not necessarily identical.
         labelmapping = {}
@@ -867,15 +930,19 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
     # out into the Code object (which can be modified by users of the API!)
     # and in part on the contents of the code string itself.
 
-    # TODO: add Python 3.x flags, CO_NESTED, CO_COROUTINE, CO_ITERABLE_COROUTINE
-
     def _compute_flags(self):
+        # take a census of the unique opcodes used.
         opcodes = set(op for op, arg in self.code if isopcode(op))
 
+        # calculate CO_OPTIMIZED based on opcode usage.
         optimized = (STORE_NAME not in opcodes and
                      LOAD_NAME not in opcodes and
                      DELETE_NAME not in opcodes)
+
+        # note if a yield is used.
         generator = (YIELD_VALUE in opcodes)
+
+        # CO_NOFREE means, no opcodes that refer to "free" vars
         nofree = not (opcodes.intersection(hasfree))
 
         flags = 0
@@ -885,6 +952,15 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         if self.varkwargs: flags |= CO_VARKEYWORDS
         if generator: flags |= CO_GENERATOR
         if nofree: flags |= CO_NOFREE
+
+        # Something we cannot calculate from opcode usage: is this a
+        # coroutine? Just test the original flag value.
+
+        if self.coflags & CO_COROUTINE :
+            flags |= CO_COROUTINE
+            if generator :
+                flags |= CO_ITERABLE_COROUTINE
+
         return flags
 
     def _compute_stacksize(self):
@@ -948,7 +1024,6 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
                 if pos in sf_targets:
                     # Adjust a SETUP_FINALLY from 1 to 3 stack entries.
-                    # TODO: is there a colon missing in the following???
                     curstack = curstack[:-1] + (curstack[-1] + 2,)
 
                 if stacks[pos] is None:
@@ -973,46 +1048,15 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 # No place in particular to continue to
                 pass
 
-            #elif op == MAKE_CLOSURE and python_version == '2.4':
-                ## This is only relevant in Python 2.4 - in Python 2.5 the stack
-                ## effect of MAKE_CLOSURE can be calculated from the arg.
-                ## In Python 2.4, it depends on the number of freevars of TOS,
-                ## which should be a code object.
-                #if pos == 0:
-                    #raise ValueError("MAKE_CLOSURE can't be the first opcode")
-                #lastop, lastarg = code[pos-1]
-                #if lastop != LOAD_CONST:
-                    #raise ValueError( "MAKE_CLOSURE should come after a LOAD_CONST op")
-                #try:
-                    #nextrapops = len(lastarg.freevars)
-                #except AttributeError:
-                    #try:
-                        #nextrapops = len(lastarg.co_freevars)
-                    #except AttributeError:
-                        #raise ValueError("MAKE_CLOSURE preceding const should be a code or a Code object")
-
-                #yield pos+1, newstack(-arg-nextrapops)
-
-            elif op not in hasflow:
-                # Simple change of stack
-                yield pos+1, newstack( stack_effect( op, arg ) )
-
             elif op in (JUMP_FORWARD, JUMP_ABSOLUTE):
                 # One possibility for a jump
                 yield label_pos[arg], curstack
 
-            #elif python_version < '2.7' and op in (JUMP_IF_FALSE, JUMP_IF_TRUE):
-                ## Two possibilities for a jump
-                #yield label_pos[arg], curstack
-                #yield pos+1, curstack
-
-            # elif python_version >= '2.7' and op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
             elif op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
                 # Two possibilities for a jump
                 yield label_pos[arg], newstack(-1)
                 yield pos+1, newstack(-1)
 
-            # elif python_version >= '2.7' and op in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
             elif op in (JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP):
                 # Two possibilities for a jump
                 yield label_pos[arg], curstack
@@ -1066,7 +1110,6 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 yield label_pos[arg], newstack(1)
                 yield pos+1, curstack + (0,)
 
-            # elif python_version == '2.7' and op == SETUP_WITH:
             elif op == SETUP_WITH:
                 yield label_pos[arg], curstack
                 yield pos+1, newstack(-1) + (1,)
@@ -1088,14 +1131,11 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
                 # targets, and the stack recording is that of a raised
                 # exception, we can simply pop 1 object and let END_FINALLY
                 # pop the remaining 3.
-                #if python_version == '2.7':
-                    #yield pos+1, newstack(2)
-                #else:
-                    #yield pos+1, newstack(-1)
                 yield pos+1, newstack(-1)
 
             else:
-                assert False, "Unhandled opcode: %r" % op
+                # nothing special, use the CPython value
+                yield pos+1, newstack( stack_effect( op, arg ) )
 
 
         # Now comes the calculation: open_positions holds positions which are
@@ -1117,6 +1157,7 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         Assemble a Python code object from this Code object.
         """
         co_argcount = len(self.args) - self.varargs - self.varkwargs
+        co_kwonlyargcount = self.kwonlyargcount
         co_stacksize = self._compute_stacksize()
         co_flags = self._compute_flags()
 
@@ -1245,7 +1286,6 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
             co_code[pos+1] = jump & 0xFF
             co_code[pos+2] = (jump >> 8) & 0xFF
 
-        # TODO: following use of .tostring is probably an error in Python 3?
         co_code = co_code.tostring()
         co_lnotab = co_lnotab.tostring()
 
@@ -1255,8 +1295,9 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
         co_nlocals = len(co_varnames)
         co_cellvars = tuple(co_cellvars)
 
-        return types.CodeType(co_argcount, co_nlocals, co_stacksize, co_flags,
-                              co_code, co_consts, co_names, co_varnames,
+        return types.CodeType(co_argcount, co_kwonlyargcount, co_nlocals, co_stacksize, co_flags,
+                              co_code,
+                              co_consts, co_names, co_varnames,
                               self.filename, self.name, self.firstlineno, co_lnotab,
                               co_freevars, co_cellvars)
 
@@ -1265,6 +1306,8 @@ CO_COROUTINE and CO_ITERABLE_COROUTINE?
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
+# Given a function, take its code object to a Code object, and back again.
+# Return a new function that uses the recompiled code object.
 
 def recompile( function ) :
     test_code_object = function.__code__
@@ -1278,35 +1321,37 @@ def recompile( function ) :
         )
     return new_function
 
+# Iterate through a list of tests. Each item in the list is a tuple,
+# ( func [, arg1,...] ), a function followed by its zero or more
+# argument values.
 
-# TODO: rewrite all test
-# def recompile( function )
-#    take a defined function, recompile its __code__, return it
-# def test_n(args)
-#    define 1 or more functions named test_1, test_2 etc
-# test_list = [ (test_n, arg1,... ),... ]
-#    list of test functions each with its needed args so that
-#        test_list[n][0](*test_list[n][1:])
-#    is a function invocation
-# main():
-#    loop executing as follows:
-#        try:
-#            result = test_list[n][0]( *test_list[n][1:] )
-#        except Exception as e:
-#            result = e # expected exception?
-#        try:
-#            modfun = recompile( test_list[n][0] )
-#            try:
-#                modresult = modfun( test_list[n][1:] )
-#            except Exception as e:
-#                modresult = e
-#            if result != modresult :
-#                print( 'test',n,'failed' )
-#        except Exception as e:
-#            print( 'exception doing recompile', e )
-#
-# TODO: write separate test program that imports byteplay3 and
-# recompiles source files in the manner of byteplay2.
+def test_a_list( func_list ) :
+
+    for func_tuple in func_list:
+
+        test_func = func_tuple[0]
+        test_args = func_tuple[1:]
+
+        try:
+            result = test_func( *test_args )
+        except Exception as e :
+            result = e # expected exception?
+        try :
+            mod_func = recompile( test_func )
+            try :
+                mod_result = mod_func( *test_args )
+            except Exception as e :
+                mod_result = e
+            if result != mod_result :
+                print( 'test ', test_func.__name__, test_args, ' failed' )
+                print( 'test result:', result )
+                print( 'recompiled result:', mod_result )
+            else :
+                print( test_func.__name__, test_args )
+        except Exception as e :
+            print( 'Recompile of ',test_func.__name__, 'failed with', e )
+
+# TODO: add more sophisticated test cases, generators, globals, closures etc.
 
 def test_0():
     ''' minimal test case '''
@@ -1314,12 +1359,23 @@ def test_0():
     b = a/2
     return b
 
+def test_1(n):
+    ''' test case with a for-loop and some ifs '''
+    if n > 0 :
+        s = 0
+        for i in range(n) :
+            s += i
+    else :
+        s = 0
+    return s
+
+case_list = [ (test_0, ), (test_1, 5), (test_1, -1) ]
+
 def main():
+    test_a_list( case_list )
 
-    new_test_0 = recompile( test_0 )
-    assert new_test_0() == test_0()
-
-
+# TODO: write separate test program that imports byteplay3 and
+# recompiles source files in the manner of byteplay2.
 
 if __name__ == '__main__':
     main()
