@@ -92,21 +92,21 @@ byteplay3 as compared to the original.
 
 1. Only Python 3.x supported.
 
-2. Class `Opcode.\_\_repr\_\_()` has different output than `Opcode.\_\_str\_\_()`.
+2. Class `Opcode.__repr__()` has different output than `Opcode.__str__()`.
    Previously they were identical; now `__repr__()` returns a string that
    could be eval'd to reproduce the Opcode object (if "Opcode" is defined).
 
-3. `CodeList.\_\_str\_\_()` result is now a list of strings.
+3. `CodeList.__str__()` result is now a list of strings.
    Originally it returned a single big string of the disassembled bytecode
    sequence; now it is a list of lines. The `printcodelist()` method works
    as before to print a disassembly to a file or stdout.
 
-4. I have added `stack\_effect(Opcode, arg) ==> net\_stack\_change\_int`,
-   from the opcode module, which is passed in `\_\_all\_\_`.
+4. I have added `stack_effect(Opcode, arg) ==> net_stack_change_int`,
+   from the opcode module, which is passed in `__all__`.
    This stack effect routine is in fact the CPython routine from compile.c.
    As such it is fast, and maintained as part of CPython.
 
-5. The function `getse(Opcode, arg) ==> (pop\_count\_int,push\_count\_int)`
+5. The function `getse(Opcode, arg) ==> (pop_count_int,push_count_int)`
    from byteplay2 is changed. Formerly it used a bunch of code modified from the
    Bytecode Assembler. Now it returns a minimal result based on calling
    stack\_effect(). The returned tuple will at least sometimes not be the
