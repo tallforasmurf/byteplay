@@ -81,9 +81,9 @@ The following names are available from the module:
             A set of valid Opcodes, for quick testing (x in opcodes...)
 
         The following are sets of Opcodes used for fast tests of opcode
-        features, "if oc in hasarg..."
+        features, "if x in hasarg..."
 
-        hasarg     opcodes that take an argument
+        hasarg     opcodes that take an argument, inc. EXTENDED_ARG
         hascode    opcodes that take a code object argument
         hascompare opcodes that take one of cmp_op
         hasjabs    opcodes that jump to an absolute bytecode offset
@@ -301,6 +301,12 @@ hascompare = set(Opcode(x) for x in opcode.hascompare)
 # is a more readable test than "x >= HAVE_ARGUMENT"
 
 hasarg = set(x for x in opcodes if x >= opcode.HAVE_ARGUMENT)
+# Note that EXTENDED_ARG was excluded from the opcodes set, which is ok
+# however an EXTENDED_ARG opcode does have an arg (by definition, yo) and
+# needs to be handled with other members of hasarg in _from_code(). Frankly I
+# do not see how the original byteplay could work without this. I'm
+# dubious if they ever processed an actual EXTENDED_ARG example.
+hasargx = hasarg | set( (Opcode( opcode.EXTENDED_ARG ),) )
 
 # ... have a constant argument (currently only 100=LOAD_CONST)
 
@@ -330,7 +336,7 @@ haslocal = set(Opcode(x) for x in opcode.haslocal)
 
 hasfree = set(Opcode(x) for x in opcode.hasfree)
 
-# ..have a code object for their argument
+# ..refer to a code object at TOS1 with function name at TOS
 
 hascode = set( [ Opcode(MAKE_FUNCTION), Opcode(MAKE_CLOSURE) ] )
 
@@ -352,7 +358,7 @@ def stack_effect( op, arg ):
     if op == NOP :
         return 0
     passed_arg = None
-    if op in hasarg and arg is not None :
+    if op in hasarg :
         try:
             passed_arg = int( arg )
         except:
@@ -774,7 +780,7 @@ class Code(object):
 
         # Create a CodeList object to represent the bytecode string.
 
-        code = list()       # ordinary list receives (op,arg) tuples
+        code = CodeList()   # receives (op,arg) tuples
         n = len(co_code)    # number bytes in the bytecode string
         i = 0               # index over the bytecode string
         extended_arg = 0    # upper 16 bits of an extended arg
@@ -796,27 +802,30 @@ class Code(object):
 
             i += 1 # step index to the argument if any
 
-            # If this op has a code object as its argument (MAKE_FUNCTION or
-            # _CLOSURE) then that code object should have been pushed on the
-            # stack by a preceding LOAD_CONST. Check that. Then recursively
-            # convert the argument code object into a Code and replace the
-            # const with a ref to that object.
-
-            # TODO: wouldn't this make more sense as:
-            #  if op not in hasarg:... elif op in hascode: ... else...?
-
-            if op in hascode:
-                lastop, lastarg = code[-1]
-                if lastop != LOAD_CONST:
-                    raise ValueError(
-                          "%s should be preceded by LOAD_CONST code" % op
-                          )
-                code[-1] = (LOAD_CONST, Code.from_code(lastarg))
-
-            if op not in hasarg:
+            if op not in hasargx :
                 # No argument, push the minimal tuple, done.
                 code.append((op, None))
             else:
+                # op takes an argument. Look for MAKE_FUNCTION or MAKE_CLOSURE.
+                if op in hascode :
+                    # special case: with these opcodes, at runtime, TOS1 should
+                    # be a code object. We require the normal opcode sequence:
+                    #    LOAD_CONST the code object
+                    #    LOAD_CONST the name of the function
+                    #    MAKE_FUNCTION/CLOSURE
+                    # When this exists, go back and convert the argument of the
+                    # first LOAD_CONST from a code object to a Code object.
+                    if len(code) >= 2 \
+                       and code[-2][0] == LOAD_CONST \
+                       and code[-1][0] == LOAD_CONST \
+                       and isinstance( code[-2][1], types.CodeType ) :
+                        code[-2] = ( Opcode(LOAD_CONST), Code.from_code( code[-2][1] ) )
+                    else :
+                        raise ValueError(
+                            'Invalid opcode sequence for MAKE_FUNCTION/MAKE_CLOSURE'
+                        )
+                    # now continue and handle the argument of MAKE_F/C normally.
+
                 # Assemble the argument value from two bytes plus an extended
                 # arg when present.
                 arg = co_code[i] + co_code[i+1]*256 + extended_arg
@@ -826,43 +835,48 @@ class Code(object):
                 if op == opcode.EXTENDED_ARG:
                     # The EXTENDED_ARG op is just a way of storing the upper
                     # 16 bits of a 32-bit arg in the bytestream. Collect
-                    # those bits but generate no code tuple.
+                    # those bits, but generate no code tuple.
                     extended_arg = arg << 16
+
                 elif op in hasconst:
-                    # When the argument is a constant, put the constant itself
-                    # in the opcode tuple.
+                    # When the argument is a constant, put the constant
+                    # itself in the opcode tuple. If that constant is a code
+                    # object, the test above (if op in hascode) will later
+                    # convert it into a Code object.
                     code.append((op, code_object.co_consts[arg]))
+
                 elif op in hasname:
                     # When the argument is a name, put the name string itself
                     # in the opcode tuple.
                     code.append((op, code_object.co_names[arg]))
+
                 elif op in hasjabs:
                     # When the argument is an absolute jump, put the label
                     # in the tuple (in place of the label list index)
                     code.append((op, labels[arg]))
+
                 elif op in hasjrel:
                     # When the argument is a relative jump, put the label
                     # in the tuple in place of the forward offset.
                     code.append((op, labels[i + arg]))
+
                 elif op in haslocal:
                     # When the argument is a local var, put the name string
                     # in the tuple.
                     code.append((op, code_object.co_varnames[arg]))
+
                 elif op in hascompare:
                     # When the argument is a relation (like ">=") put that
                     # string in the tuple instead.
                     code.append((op, cmp_op[arg]))
+
                 elif op in hasfree:
                     # TODO understand this shit
                     code.append((op, cellfree[arg]))
+
                 else:
                     # whatever, just put the arg in the tuple
                     code.append((op, arg))
-
-        # Convert the code list into a CodeList. Do this in a single step so that
-        # code.changed==False.
-
-        code = CodeList( code )
 
         # Store certain flags from the code object as booleans for convenient
         # reference as Code members.
@@ -1262,9 +1276,22 @@ class Code(object):
 
             else:
                 if op in hasconst:
-                    if isinstance(arg, Code) and i < len(self.code)-1 and \
-                       self.code[i+1][0] in hascode:
-                        arg = arg.to_code()
+                    # op takes a constant. Check for the special case of the
+                    # constant value being a Code object. If that is so, then
+                    # check that there are at least 2 more ops in the
+                    # CodeList and the next+1 op is MAKE_FUNCTION/_CLOSURE.
+                    # This special case is assured by the from_code() logic,
+                    # but if the user has modified the CodeList, we want to
+                    # catch the error now.
+
+                    if isinstance(arg, Code) :
+                        if i < len(self.code)-2 \
+                           and self.code[i+2][0] in hascode :
+                            arg = arg.to_code()
+                        else :
+                            raise ValueError('Invalid opcode sequence for Code enclosure')
+                    # locate, or stow, the argument value in the code object
+                    # constants list and keep its index.
                     arg = index(co_consts, arg, operator.is_)
                 elif op in hasname:
                     arg = index(co_names, arg)
@@ -1386,10 +1413,45 @@ def test_1(n):
         s = 0
     return s
 
-case_list = [ (test_0, ), (test_1, 5), (test_1, -1) ]
+def test_2(n):
+    ''' test case with slice notations n>=4 '''
+    lst = list( range(n) )
+    sublist = lst[0:n-2:2]
+    return sublist
+
+def test_3(x) :
+    '''test case with simple closure'''
+    def shut(a):
+        return 2*a
+    return shut(x)
+
+def test_4() :
+    '''a bunch of closures from test_grammar.py
+    note this test case contains an EXTENDED_ARG opcode'''
+    closure = 1
+    def f(): return closure
+    def f(x=1): return closure
+    def f(*, k=1): return closure
+    def f() -> int: return closure
+
+
+
+def generate_n( n ) :
+    yield n
+
+
+case_list = [
+    (test_0, ),
+    (test_1, 5),
+    (test_1, -1),
+    (test_2, 8),
+    (test_3, 5),
+    (test_4, )
+]
 
 def main():
     test_a_list( case_list )
+
 
 # TODO: write separate test program that imports byteplay3 and
 # recompiles source files in the manner of byteplay2.
