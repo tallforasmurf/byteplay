@@ -1366,8 +1366,24 @@ def recompile( function ) :
     return new_function
 
 # Iterate through a list of tests. Each item in the list is a tuple,
-# ( func [, arg1,...] ), a function followed by its zero or more
+# ( func, [ arg1,...] ), a function followed by its zero or more
 # argument values.
+
+import re
+trailing_address = re.compile( '^(.*?)at 0x[0-9a-f]+>$' )
+def compare_results( a, b ):
+    if a is None and b is None : return True
+    if a == b : return True
+    try :
+        # look for '< somekinda object name at 0x0f0f0f0f0f0>'
+        # and compare without the address part.
+        match_a = trailing_address.match( str( a ) )
+        match_b = trailing_address.match( str( b ) )
+        if match_a and match_b :
+            return match_a.group(1) == match_b.group(1)
+    except :
+        pass # ignore error in str()
+    return False
 
 def test_a_list( func_list ) :
 
@@ -1386,7 +1402,7 @@ def test_a_list( func_list ) :
                 mod_result = mod_func( *test_args )
             except Exception as e :
                 mod_result = e
-            if result != mod_result :
+            if not compare_results( result, mod_result ) :
                 print( 'test ', test_func.__name__, test_args, ' failed' )
                 print( 'test result:', result )
                 print( 'recompiled result:', mod_result )
@@ -1395,10 +1411,11 @@ def test_a_list( func_list ) :
         except Exception as e :
             print( 'Recompile of ',test_func.__name__, 'failed with', e )
 
-# TODO: add more sophisticated test cases, generators, globals, closures etc.
+def test_00():
+    pass
 
 def test_0():
-    ''' minimal test case '''
+    ''' small test case '''
     a = 2
     b = a/2
     return b
@@ -1426,7 +1443,7 @@ def test_3(x) :
     return shut(x)
 
 def test_4() :
-    '''a bunch of closures from test_grammar.py
+    '''test of a bunch of closures from test_grammar.py
     note this test case contains an EXTENDED_ARG opcode'''
     closure = 1
     def f(): return closure
@@ -1434,19 +1451,33 @@ def test_4() :
     def f(*, k=1): return closure
     def f() -> int: return closure
 
-
-
-def generate_n( n ) :
+def test_5( n ) :
+    '''test of a generator '''
     yield n
 
+def test_6( ) :
+    '''bunch of crazy lambdas from test_grammar.py'''
+    l1 = lambda : 0
+    assert l1() == 0
+    l2 = lambda : a[d] # XXX just testing the expression
+    l3 = lambda : [2 < x for x in [-1, 3, 0]]
+    assert l3() == [0, 1, 0]
+    l4 = lambda x = lambda y = lambda z=1 : z : y() : x()
+    assert l4() == 1
+    l5 = lambda x, y, z=2: x + y + z
+    assert l5(1, 2) == 5
+    assert l5(1, 2, 3) == 6
 
 case_list = [
+    (test_00, ),
     (test_0, ),
     (test_1, 5),
     (test_1, -1),
     (test_2, 8),
     (test_3, 5),
-    (test_4, )
+    (test_4, ),
+    (test_5, 'a'),
+    (test_6, )
 ]
 
 def main():
