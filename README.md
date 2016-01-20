@@ -1,6 +1,6 @@
 # byteplay
 
-* Originally created by Noah Raph
+* Originally created by Noam Raph
 * Original code archived and frozen at http://code.google.com/p/byteplay
 * This Repository automatically exported from code.google.com/p/byteplay
 
@@ -11,7 +11,7 @@ For a full explanation with code examples, see https://pypi.python.org/pypi/byte
 This summary is extracted from the above pypi page:
 
 byteplay is a module which lets you easily play with Python bytecode.
-I (Noah Raph) wrote it because I needed to manipulate Python bytecode...
+I (Noam Raph) wrote it because I needed to manipulate Python bytecode...
 
 The basic idea is simple: define a new type, named Code,
 which is equivalent to Python code objects,
@@ -74,7 +74,7 @@ to investigate the possibility of converting it to Python 3.
 The file byteplay3.py is my edited version for Python 3.
 **At this time byteplay3 is a work in progress**.
 
-The file byteplay.py is the original code by Noah.
+The file byteplay.py is the original code by Noam.
 It supports Python 2.7 and before.
 It is probably identical to the code available on pypi (linked above)
 but you should not depend on that.
