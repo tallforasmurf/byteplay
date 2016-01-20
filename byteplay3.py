@@ -16,10 +16,7 @@ Expected use:
 
 2. Opcode.__repr__() has different output than Opcode.__str__()
 
-3. CodeList.__str__() value is a list of strings, not a single string
-   (but printcodelist() works as before).
-
-4. Function getse(Opcode, arg) ==>(pop_count,push_count) is removed. Partially
+3. Function getse(Opcode, arg) ==>(pop_count,push_count) is removed. Partially
    replaced by opcode.stack_effect(opcode, arg) ==> int, which is passed in
    __all__. The reasons are, one, the latter is coded in C, and two, is
    maintained as part of CPython, and three, this removes 200 lines
@@ -118,10 +115,27 @@ The following names are available from the module:
             true when opcode is a Python-defined opcode and not one
             of the two convenience values Label and SetLineno.
 
-        printcodelist( CodeList_object, to=sys.stdout )
-            print a disassembly of the code in CodeList_object to the
+        printcodelist( code_or_codelist, to=None, heading=None )
+            print a disassembly of the code in a Code or a codelist to the
             default output stream or a specified file object. If "to"
             file is opened in binary mode, the output is UTF-8 encoded.
+
+        object_attributes( thing )
+            Return a list of the names of the attributes of thing,
+            which are not also names of the type "object".
+
+        print_object_attributes( thing, heading=None, file=None )
+            Print the list returned by object_attributes vertically
+            with an optional === heading === above.
+
+        print_attr_values( thing, all=False, heading=None, file=None )
+            Print a vertical list of the attribute names of thing,
+            with a colon followed by the value of each, for example
+            of a code object it might print in part,
+                co_firstlineno : 110
+                co_flags : 79
+                co_freevars : ()
+            If heading is 1 (or any nonzero int) a default heading is printed.
 
 '''
 
@@ -146,7 +160,7 @@ __license__ = '''
     COPYING.TXT included in the distribution of this module, or see:
     <http://www.gnu.org/licenses/>.
 '''
-__version__ = "3.0.0"
+__version__ = "3.5.0"
 __author__  = "Noam Yorav-Raphael (Python 2); David Cortesi (Python 3 mods)"
 __copyright__ = "Copyright (C) 2006-2010 Noam Yorav-Raphael; Python3 modifications (C) 2016 David Cortesi"
 __maintainer__ = "David Cortesi"
@@ -175,10 +189,13 @@ __all__ = ['cmp_op',
            'hasflow',
            'isopcode',
            'Label',
+           'object_attributes',
            'Opcode',
            'opmap',
            'opname',
            'opcodes',
+           'print_object_attributes',
+           'print_attr_values',
            'printcodelist',
            'SetLineno',
            'stack_effect'
@@ -223,8 +240,55 @@ from dis import findlabels
 # Check the Python version. We support 3.x only.
 
 python_version = '.'.join(str(x) for x in sys.version_info[:2])
-if sys.version_info[0] != 3 :
-    print( "This version of BytePlay requires Python 3.x", file=sys.stderr )
+if sys.version_info.major != 3 :
+    print( "This version of BytePlay requires Python 3", file=sys.stderr )
+    exit
+elif sys.version_info.minor < 4 :
+    print( "This version of byteplay requires Python 3.4 or later", file=sys.stderr )
+    exit
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+#
+# Define some functions that are useful in exploring function objects
+# and code objects.
+#
+def object_attributes( thing ) :
+    '''
+    Return a sorted list of names defined by thing that are not also names in
+    a standard object, except include __doc__.
+    '''
+    standard_names = set( dir( object() ) )
+    things_names = set( dir( thing ) )
+    return sorted( ( things_names - standard_names ) | set( ['__doc__'] ) )
+
+def print_object_attributes( thing, heading=None, file=None ):
+    '''
+    Print the attribute names in thing vertically
+    '''
+    if heading : print( '==', heading, '==', file=file )
+    print( '\n'.join( object_attributes( thing ) ), file=file )
+
+def print_attr_values( thing, all=False, heading=None, file=None ):
+    '''
+    Print the attributes of thing which have non-empty values,
+    as a vertical list of "name : value"
+    '''
+    if heading :
+        if isinstance( heading, int ) :
+            # request for default heading
+            heading = '== {} attributes of {} =='.format(
+                            'all' if all else 'non-empty',
+                            getattr( thing, '__name__', str(thing) )
+            )
+        print( heading, file=file )
+
+    for attr in object_attributes( thing ):
+        attr_value = getattr( thing, attr )
+        if attr_value is not None :
+            print( attr, ':', attr_value, file=file )
+        elif all :
+            print( attr, ':' )
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
@@ -340,6 +404,25 @@ hasfree = set(Opcode(x) for x in opcode.hasfree)
 
 hascode = set( [ Opcode(MAKE_FUNCTION), Opcode(MAKE_CLOSURE) ] )
 
+# ..may not continue to the next sequential instruction
+
+hasflow = hasjump | set( [ Opcode(BREAK_LOOP),
+                 Opcode(RETURN_VALUE),
+                 Opcode(YIELD_VALUE),
+                 Opcode(YIELD_FROM),
+                 Opcode(POP_BLOCK),
+                 Opcode(POP_EXCEPT),
+                 Opcode(END_FINALLY),
+                 Opcode(RAISE_VARARGS),
+                 Opcode(CALL_FUNCTION)
+                 ] ) | set(
+                     [ Opcode(op)
+                       for (name, op) in opmap.items()
+                       if name.startswith('WITH_CLEANUP')
+                    ] )
+
+
+
 # Pass on the opcode.stack_effect() routine (which is actually implemented
 # in CPython Modules/_opcode.c) as part of our API.
 #
@@ -402,9 +485,10 @@ Also in an actual bytecode string, an integer argument that does not fit in
 the CodeList, the extra bits are gathered into a single long int and the
 EXTENDED_ARG bytecode is dropped.
 
-The __str__() result of a CodeList is a formatted disassembly as a list of
-strings, one line per bytecode. The printcodelist() function writes the
-list to a file (or stdout).
+The __str__() result of a CodeList is a formatted disassembly as a large
+string, one line per bytecode. The printcodelist() function was used to
+produce this disassembly in the original code. It is retained for
+compatibility.
 
 Note that CodeList __init__ method exists (to set self.changed=False) but any
 argument is passed on to the parent list class. Normally there is no
@@ -494,7 +578,7 @@ normal list behavior is the __str__() function.
                 # nope, no argument needed
                 argstr = ''
 
-            line = '%3s     %2s %4d %-20s %s' % (
+            line = '%4s   %2s %4d %-20s %s' % (
                 linenostr,
                 islabelstr,
                 i,
@@ -502,9 +586,9 @@ normal list behavior is the __str__() function.
                 argstr
             )
             output.append( line )
-        return output
+        return '\n'.join( output ) + '\n'
 
-def printcodelist(codelist, to=sys.stdout):
+def printcodelist(code_or_codelist, to=sys.stdout, heading=None):
     '''
     Write the lines of the codelist string list to the given file, or to
     the default output.
@@ -522,12 +606,27 @@ def printcodelist(codelist, to=sys.stdout):
     (See? Python 3 not so hard...)
 
     '''
+    # Emulate the cascade of argument conversions in dis.dis.
+    # If we were passed a function, get its code object.
+    if isinstance( code_or_codelist, types.FunctionType ) :
+        code_or_codelist = code_or_codelist.__code__
+    # If we were passed a python code object, convert to Code.
+    if hasattr( code_or_codelist, 'co_code' ) :
+        code_or_codelist = Code.from_code( code_or_codelist )
+    # If we were passed a Code object, extract its CodeList.
+    if isinstance( code_or_codelist, Code ) :
+        code_or_codelist = code_or_codelist.code
+    # If we don't have a CodeList by now, complain.
+    if not isinstance( code_or_codelist, CodeList ) :
+        raise ValueError( 'argument to printcodelist is not a CodeList' )
     # Get the whole disassembly as a string.
-    whole_thang = '\n'.join( str( codelist ) )
-    # if necessary, encode it to bytes
+    whole_thang = str( code_or_codelist )
+    # if destination not a text file, encode it to bytes
     if not hasattr( to, 'encoding' ) :
         whole_thang = whole_thang.encode( 'UTF-8' )
     # send it on its way
+    if heading :
+        to.write( '===' + heading + '===\n' )
     to.write( whole_thang )
 
 
@@ -1468,6 +1567,17 @@ def test_6( ) :
     assert l5(1, 2) == 5
     assert l5(1, 2, 3) == 6
 
+def test_7( ) :
+    '''defines a class with class variable and method'''
+    class T7:
+        t77 = 77
+        def __init__(self):
+            self.t777 = 1
+        def foo(self):
+            return T7.t77 + self.t777
+    ot7 = T7()
+    return ot7.foo()
+
 case_list = [
     (test_00, ),
     (test_0, ),
@@ -1477,11 +1587,30 @@ case_list = [
     (test_3, 5),
     (test_4, ),
     (test_5, 'a'),
-    (test_6, )
+    (test_6, ),
+    (test_7, )
 ]
 
 def main():
     test_a_list( case_list )
+    #print_object_attributes( test_6, heading='something' )
+    #print_attr_values( test_6, heading=1 )
+    #print_attr_values( test_6, heading='this is the heading', all=True )
+    #print_attr_values( print_attr_values, heading=9, all=True )
+    #test_code_object = test_1.__code__
+    #expanded_code = Code.from_code( test_code_object )
+    #code_list = expanded_code.code
+    #printcodelist( code_list, heading='from CodeList object' )
+    #printcodelist( expanded_code, heading='from Code object' )
+    #printcodelist( test_code_object, heading='from code object' )
+    #printcodelist( test_1, heading='from function' )
+    #try:
+        #printcodelist( 42, heading='not gonna happen' )
+        #print( 'error in printcodelist')
+    #except ValueError as v :
+        #print( 'expected error from printcodelist',v )
+    #except Exception as e :
+        #print( 'unexpected error from printcodelist', e )
 
 
 # TODO: write separate test program that imports byteplay3 and
