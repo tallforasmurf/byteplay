@@ -56,12 +56,13 @@ likely to be a segmentation fault in Python.
 You probably would not be interested in byteplay if you did not know
 about bytecode, but let us have a quick refresher.
 
-When Python processes a `def` or `lambda` statement,
-it reduces the text version of a function to a binary form that is
+When Python processes a `def` or `lambda` statement or a `compile()` call,
+it reduces the text version of the source code to a binary form that is
 more efficient to process.
 You know that everything in Python is an object,
 so no surprise, the compilation of a defined function (or lambda) is a *function object*.
 The function object has among many attributes, a *code object*.
+(A `compile()` call returns a code object directly.)
 
 A code object is how Python represents executable code.
 It has a number of interesting attributes that you need to know
