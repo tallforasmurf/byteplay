@@ -3,17 +3,17 @@
 ## About byteplay3 ##
 
 byteplay3 is a fork of a module written by Noam Raph
-(see [History](#History) for details and links).
+(see **History** below for details and links).
 If you already have code that imports byteplay and want to 
 move that code to Python 3,
-you can do so by changing your import statement from
-`from byteplay import *` to `from byteplay3 import *`.
+you can do so by changing your import statement
+`from byteplay import *` so it reads `from byteplay3 import *`.
 Pretty much everything should work as before,
-but you should review the [API Changes](#API_Changes) section.
+but you should review the **API Changes** section below.
 
-### Important Notes ###
+### Important Notes and Warnings ###
 
-*Note One*: If you do not have existing code using byteplay,
+**Note**: If you do not have existing code using byteplay,
 and your only interest is to inspect the bytecode of functions,
 be aware that with Python version 3.4,
 the standard module `dis` includes a function
@@ -22,33 +22,33 @@ where `item` may be a function or a code object.
 It returns a generator that yields a `dis.Instruction` object
 for each bytecode instruction in sequence, with copious
 information about that instruction.
-This standard module function duplicates and supercedes byteplay3
-for purposes of display and study, and can be expected to be
+
+This standard module feature basically duplicates and supercedes byteplay3
+for purposes of bytecode display and study, and can be expected to be
 maintained promptly and correctly with each new version.
 
-*Note Two*: The bytecodes defined by the CPython interpreter
+**Caution**: The bytecodes defined by the CPython interpreter
 change in almost every release.
 (For example, Python 3.5 introduced new opcodes to deal with
 functions defined with `async def`,
 and also split the WITH\_CLEANUP opcode into two,
 WITH\_CLEANUP\_START and WITH\_CLEANUP\_FINISH.)
 
-The byteplay3 module loads,
-and exports as global names,
+The byteplay3 module exports as global names,
 all the opcodes defined in the standard module `opcode`.
-These names will be current with the version of Python that is executing byteplay3.
+These names will automatically be the ones defined in the version of Python that is executing byteplay3.
 However, byteplay3 has some code that depends on specific opcodes,
 (as may your code) and it may not have been updated for the latest bytecodes.
 Expect the unexpected when changing versions of Python.
 
-*Note Three*: When you use byteplay3 to modify bytecode or compose new bytecode,
+**Caution**: When you use byteplay3 to modify bytecode or compose new bytecode,
 your mistakes are likely to crash the CPython interpreter.
 CPython assumes that any bytecode was produced in its `compile.c`
 module, and trusts it implicitly.
 It makes no consistency checks and does not guard against,
-for example, wrong jump offsets or variable
-name indexes that are out of range.
-Your first notification that you produced invalid bytecode is
+for example, wrong jump offsets or table
+indexes that are out of range.
+The first sign that you produced invalid bytecode is
 likely to be a segmentation fault in Python.
 
 ### About Python bytecode ###
@@ -60,19 +60,17 @@ When Python processes a `def` or `lambda` statement,
 it reduces the text version of a function to a binary form that is
 more efficient to process.
 You know that everything in Python is an object,
-so no surprise, the compilation of a defined function (or lambda) is a function object.
-The function object has among many attributes,
-the function's doc string, and most important, a code object.
+so no surprise, the compilation of a defined function (or lambda) is a *function object*.
+The function object has among many attributes, a *code object*.
 
 A code object is how Python represents executable code.
 It has a number of interesting attributes that you need to know
 about in order to understand it, but its heart is
-a sequence of bytes that represent instructions to a simple
-stack machine.
-When these "bytecodes" are executed, the result is to do 
-what the function was designed to do.
+a sequence of bytes that represent instructions to a simple stack machine.
+When these *bytecodes* are executed (by the CPython module `ceval.c`),
+the result is to do what the function was designed to do.
 
-(Note you can inspect the attributes of a function or code object
+(Note you can inspect the attributes of a function object or code object
 easily with the `byteplay3.print_attr_values()` function.)
 
 The purpose of byteplay3 is to make it possible to examine
@@ -86,7 +84,7 @@ To learn more about bytecodes, consult one of these sources:
 
 * Ryan Kelly's short talk
   ["Bytecode: What, Why, and How to Hack it"](https://www.youtube.com/watch?v=ve7lLHtJ9l8),
-  contains a demonstration of using byteplay!
+  which contains a demonstration of using byteplay!
 
 * Brett Cannon's talk on
   [how CPython compiles source to bytecode](https://www.youtube.com/watch?v=R31NRWgoIWM)
@@ -96,7 +94,8 @@ To learn more about bytecodes, consult one of these sources:
   is especially good on the contents of a code object.
 
 * In the CPython source distro, see the files `Doc/library/dis.rst` and
-  `Doc/library/inspect.rst`, then read the `dis.py` and `inspect.py` modules 
+  `Doc/library/inspect.rst`.
+  In your installed Python, read the `opcode.py`, `dis.py` and `inspect.py` modules 
   themselves.
 
 ### The Code and CodeList classes ###
@@ -208,8 +207,9 @@ However it overrides the `__str__()` method to return the string representation 
     >>> print( 124, Opcode(124) )
         124 LOAD_FAST
 
-All the opcodes in a CodeList are Opcode objects.
-It is not essential to use an Opcode in a CodeList tuple;
+When you make a Code object using `Code.from_code()`,
+all the opcodes in its CodeList are Opcode objects.
+It is not essential to use an Opcode when updating or inserting a CodeList tuple;
 an integer constant such as 124 can be used.
 Opcode instances are easier to read when printed.
 
@@ -219,9 +219,7 @@ bytecode as defined in the standard module `opcode`.
 of Python that is executing byteplay3.)
 Each of these constants is an Opcode object;
 for example the global constant `LOAD_FAST` is defined as `Opcode(124)`.
-When you write `from byteplay import *` all these names are defined.
-
-The known Opcodes are also in the `opcodes` set.
+When you write `from byteplay import *` all these names are added to your namespace.
 
 ### EXTENDED\_ARG ###
 
@@ -292,7 +290,7 @@ for its behavior.
 
 `hasfree`
   The set of opcodes that operate on the cell and free variable storage.
-  See [About Freevars](#About_Freevars) below.
+  See **About Freevars** below.
 
 `hascode`
   The set of opcodes that expect a code object to be at the top of the stack.
@@ -430,14 +428,15 @@ code object returned by `Code.to_code()`.
   
   * Opcodes in the `hasarg` set take arguments as follows:
     - Opcodes in `hasconst` take an actual constant.
-    - Opcodes in `hasname` take name, as a string.
+    - Opcodes in `hasname` take a name, as a string.
     - Opcodes in `hasjump` take the index of a Label instance at a specific location in the code list.
     - Opcodes in `haslocal` take the local variable name, as a string.
     - Opcodes in `hascompare` take the string representing the comparison operator.
     - Opcodes in `hasfree` take the name of the cell or free variable, as a string.
     - The argument of the remaining opcodes is the numerical argument found in
       raw bytecode. Its meaning is opcode-specific.
-  Note that Python avoids redundancy in bytecode by using arguments that
+ 
+ Note that Python avoids redundancy in bytecode by using arguments that
   are indexes into a table of unique constants or names.
   The Code object does not do this.
   If a name or constant is used multiple times,
@@ -450,7 +449,7 @@ code object returned by `Code.to_code()`.
   The order of this list is important,
   since those variables are passed to the function in the same sequence
   as the names in the `freevars` list.
-  See [About Freevars](#About_Freevars) below.
+  See **About Freevars** below.
   
 `args`
   The list of argument names of a function. For example::
@@ -582,11 +581,12 @@ Blocks allow us to break from a loop,
 regardless of exactly how many items we have in stack.
 How? Simple.
 Before the loop starts, the SETUP\_LOOP opcode is executed.
-This opcode records in a block the number of operands(items) currently in stack,
+This opcode records in a block the number of operands (items) currently on the stack,
 and also a position in the code.
-When the POP\_BLOCK is executed,
-the stack is restored to the recorded state by poping extra items,
-and the corresponding block is discarded.
+At the end of the loop is a POP\_BLOCK opcode.
+When it is executed,
+the stack is restored to the recorded state by popping any extra items.
+Then the corresponding block is discarded.
 But if the BREAK\_LOOP opcode is executed instead of POP\_BLOCK,
 one more thing happens.
 The execution jumps to the position specified by the SETUP\_LOOP opcode.
@@ -605,13 +605,13 @@ because a new block, without elements yet, was pushed.
 Another complication: the SETUP\_FINALLY opcode specifies an address to jump to
 if an exception is raised or a BREAK\_LOOP operation was executed.
 This address can also be reached by normal flow.
-However, the stack state in that address will be different
+However, the stack state on reaching that address will be different
 depending on what actually happened.
 If an exception was raised, 3 elements will be pushed;
 if BREAK\_LOOP was executed, 2 elements will be pushed;
 and if nothing happened, 1 element will be pushed by a LOAD\_CONST operation.
 This seemingly non-consistent state always ends with an END\_FINALLY opcode.
-The END\_FINALLY opcodes pops 1, 2 or 3 elements according to what it finds on stack,
+The END\_FINALLY opcode pops 1, 2 or 3 elements according to what it finds on stack,
 so we return to "consistent" state.
 How can we deal with that complexity?
 
@@ -642,8 +642,9 @@ A reference to the cell object is passed to any function which uses that variabl
 When an inner function is interested in the value of a variable of an outer scope,
 it uses the value referred by the cell object passed to it.
 
-An example might help understand this. Let's take a look at the bytecode of a
-simple example::
+An example might help understand this.
+Let's take a look at the bytecode of a simple example::
+
     >>> def f():
     ...     a = 3
     ...     b = 5
