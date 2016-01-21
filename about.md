@@ -240,7 +240,7 @@ When converting back to raw bytecode it inserts EXTENDED\_ARG codes as needed.
 ## The byteplay3 API ##
 
 The following are the names exported by the byteplay3 module in its `__all__` list,
-which means these are the names that you acquire using `from byteplay import *`.
+which means these are the names that you acquire using `from byteplay3 import *`.
 
 ### Opcode names and sets ###
 
