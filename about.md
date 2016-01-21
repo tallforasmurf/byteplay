@@ -222,7 +222,7 @@ bytecode as defined in the standard module `opcode`.
 of Python that is executing byteplay3.)
 Each of these constants is an Opcode object;
 for example the global constant `LOAD_FAST` is defined as `Opcode(124)`.
-When you write `from byteplay import *` all these names are added to your namespace.
+When you write `from byteplay3 import *` all these names are added to your namespace.
 
 ### EXTENDED\_ARG ###
 
