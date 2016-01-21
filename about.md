@@ -84,7 +84,10 @@ To learn more about bytecodes, consult one of these sources:
 
 * Ryan Kelly's short talk
   ["Bytecode: What, Why, and How to Hack it"](https://www.youtube.com/watch?v=ve7lLHtJ9l8),
-  which contains a demonstration of using byteplay!
+  which contains a demonstration of using byteplay.
+  The examples Ryan shows are very specific to Python 2
+  and not very relevant to Python 3.
+  However, he clearly shows the approach one could take using byteplay.
 
 * Brett Cannon's talk on
   [how CPython compiles source to bytecode](https://www.youtube.com/watch?v=R31NRWgoIWM)
