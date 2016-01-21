@@ -5,27 +5,12 @@ byteplay is a module supporting the disassembly, modification, and re-assembly
 of Python bytecode objects.
 
 Expected use:
-    import byteplay3 as bp
-    myfunc_code = bp.Code( myfunc.__code__ )
-    # manipulate myfunc_code using bp. members...
+    from byteplay3 import *
+    myfunc_code = Code( myfunc.__code__ )
+    # manipulate myfunc_code
     myfunc.__code__ = myfunc_code.to_code()
 
-            API CHANGES vs. byteplay 2 (original)
-
-1. Only Python 3.x supported, cannot use under Python 2.
-
-2. Opcode.__repr__() has different output than Opcode.__str__()
-
-3. Function getse(Opcode, arg) ==>(pop_count,push_count) is removed. Partially
-   replaced by opcode.stack_effect(opcode, arg) ==> int, which is passed in
-   __all__. The reasons are, one, the latter is coded in C, and two, is
-   maintained as part of CPython, and three, this removes 200 lines
-   of obscure and tricky-to-maintain code from this module.
-
-   Note that this module contained only one use of getse and the tuple
-   (pop,push) was immedately reduced to a single int as push-pop, in other
-   words, the single int value returned by stack_effect().
-
+For full doc see: https://github.com/tallforasmurf/byteplay/blob/master/about.md
 
 The following names are available from the module:
 
@@ -161,7 +146,7 @@ __license__ = '''
     <http://www.gnu.org/licenses/>.
 '''
 __version__ = "3.5.0"
-__author__  = "Noam Yorav-Raphael (Python 2); David Cortesi (Python 3 mods)"
+__author__  = "Noam Yorav-Raphael (original); David Cortesi (Python 3 mods)"
 __copyright__ = "Copyright (C) 2006-2010 Noam Yorav-Raphael; Python3 modifications (C) 2016 David Cortesi"
 __maintainer__ = "David Cortesi"
 __email__ = "davecortesi@gmail.com"
@@ -171,7 +156,10 @@ __email__ = "davecortesi@gmail.com"
 #
 # The __all__ global establishes the complete API of the module on import.
 # "from byteplay import *" imports these names, plus a bunch of names of
-# opcodes, and hence "import *" is not recommended!
+# opcodes. Although this form of import is usually deprecated, it makes
+# sense in this case because code that uses byteplay almost always needs
+# access to the set of opcode names.
+#
 
 __all__ = ['cmp_op',
            'Code',
@@ -296,10 +284,6 @@ def print_attr_values( thing, all=False, heading=None, file=None ):
 # presented by module opcode. The global opname, mentioned in the Opcode
 # class definition, is established just below.
 #
-# In byteplay 2, Opcode.__repr__ is the same as __str__. However, __repr__()
-# is supposed to return a string that will recreate the object, right?
-# So I am changing it so that Opcode.__str__() = the display name, but
-# Opcode.__repr__() = "Opcode(n)".
 
 class Opcode(int):
     """
@@ -522,7 +506,6 @@ normal list behavior is the __str__() function.
 
         labeldict = {}
         pendinglabels = []
-        # TODO SwearToGod I do not get this must study
         for i, ( op, arg ) in enumerate( self ):
             if isinstance(op, Label):
                 pendinglabels.append( op )
@@ -873,8 +856,6 @@ class Code(object):
 
         linestarts = dict(cls._findlinestarts(code_object))
 
-        # TODO: understand cellvars vs freevars vs varnames vs names
-        #
         cellfree = code_object.co_cellvars + code_object.co_freevars
 
         # Create a CodeList object to represent the bytecode string.
@@ -970,7 +951,6 @@ class Code(object):
                     code.append((op, cmp_op[arg]))
 
                 elif op in hasfree:
-                    # TODO understand this shit
                     code.append((op, cellfree[arg]))
 
                 else:
@@ -1148,9 +1128,6 @@ class Code(object):
             if isinstance(op, Label):
                 # We should check if we already reached a node only if it is
                 # a label.
-
-                #TODO: is the above original comment a TODO or just a remark?
-                #and what does it mean?
 
                 if pos in sf_targets:
                     # Adjust a SETUP_FINALLY from 1 to 3 stack entries.
@@ -1612,9 +1589,6 @@ def main():
     #except Exception as e :
         #print( 'unexpected error from printcodelist', e )
 
-
-# TODO: write separate test program that imports byteplay3 and
-# recompiles source files in the manner of byteplay2.
 
 if __name__ == '__main__':
     main()
