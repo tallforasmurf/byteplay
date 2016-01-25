@@ -247,6 +247,20 @@ However it overrides the `__str__()` method to return the string representation 
 
     >>> print( 124, Opcode(124) )
         124 LOAD_FAST
+	>>> for i in range(10):print(i, Opcode(i) )
+		0 0
+		1 POP_TOP
+		2 ROT_TWO
+		3 ROT_THREE
+		4 DUP_TOP
+		5 DUP_TOP_TWO
+		6 6
+		7 7
+		8 8
+		9 NOP
+
+The Opcode of an integer that is not defined just prints the integer,
+as shown.
 
 When you make a Code object using `Code.from_code()`,
 all the opcodes in its CodeList are Opcode objects.
