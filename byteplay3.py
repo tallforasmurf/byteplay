@@ -298,7 +298,7 @@ class Opcode(int):
         int(Opcode(1)) --> 1
     """
     def __str__( self ):
-        return opname[self]
+        return opname.get(self,str(self.real))
     def __repr__( self ):
         return 'Opcode(%s)' % int(self)
 
