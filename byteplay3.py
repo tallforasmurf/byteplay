@@ -100,7 +100,7 @@ The following names are available from the module:
             true when opcode is a Python-defined opcode and not one
             of the two convenience values Label and SetLineno.
 
-        printcodelist( code_or_codelist, to=None, heading=None )
+        printcodelist( thing, to=None, heading=None )
             print a disassembly of the code in a Code or a codelist to the
             default output stream or a specified file object. If "to"
             file is opened in binary mode, the output is UTF-8 encoded.
@@ -575,7 +575,27 @@ normal list behavior is the __str__() function.
             output.append( line )
         return '\n'.join( output ) + '\n'
 
-def printcodelist(code_or_codelist, to=sys.stdout, heading=None):
+def _get_a_code_object_from( thing ) :
+    '''
+    Given a thing that might be a property, a class method,
+    a function or a code object, reduce it to code object.
+    If we cannot, return the thing itself.
+    '''
+    # If we were passed a Method wrapper, get its function
+    if isinstance( thing, types.MethodType ) :
+        thing = thing.__func__
+    # If we were passed a property object, get its getter function
+    # (no direct support for the fdel or fset functions)
+    if hasattr( thing, 'fget' ) :
+        thing = thing.fget
+    # If we were passed, or now have, a function, get its code object.
+    if isinstance( thing, types.FunctionType ) :
+        thing = thing.__code__
+    # We should now have a code object, or will never have it.
+    return thing
+
+
+def printcodelist(thing, to=sys.stdout, heading=None):
     '''
     Write the lines of the codelist string list to the given file, or to
     the default output.
@@ -593,24 +613,27 @@ def printcodelist(code_or_codelist, to=sys.stdout, heading=None):
     (See? Python 3 not so hard...)
 
     '''
-    # Emulate the cascade of argument conversions in dis.dis.
-    # If we were passed a function, get its code object.
-    if isinstance( code_or_codelist, types.FunctionType ) :
-        code_or_codelist = code_or_codelist.__code__
-    # If we were passed a python code object, convert to Code.
-    if hasattr( code_or_codelist, 'co_code' ) :
-        code_or_codelist = Code.from_code( code_or_codelist )
-    # If we were passed a Code object, extract its CodeList.
-    if isinstance( code_or_codelist, Code ) :
-        code_or_codelist = code_or_codelist.code
-    # If we don't have a CodeList by now, complain.
-    if not isinstance( code_or_codelist, CodeList ) :
-        raise ValueError( 'argument to printcodelist is not a CodeList' )
-    # Get the whole disassembly as a string.
-    whole_thang = str( code_or_codelist )
+    # If we were passed a list, assume that it is a CodeList or
+    # a manually-assembled list of code tuples.
+    if not isinstance( thing, list ) :
+        # Passed something else. Reduce it to a CodeList.
+        if isinstance( thing, Code ):
+            thing = thing.code
+        else :
+            # Convert various sources to a code object.
+            thing = _get_a_code_object_from( thing )
+            try :
+                thing = Code.from_code( thing ).code
+            except Exception as e:
+                raise ValueError('Invalid input to printcodelist')
+    # We have a CodeList or equivalent,
+    # get the whole disassembly as a string.
+    whole_thang = str( thing )
     # if destination not a text file, encode it to bytes
     if not hasattr( to, 'encoding' ) :
         whole_thang = whole_thang.encode( 'UTF-8' )
+        if heading : # is not None or empty
+            heading = heading.encode( 'UTF-8' )
     # send it on its way
     if heading :
         to.write( '===' + heading + '===\n' )
@@ -1572,27 +1595,45 @@ case_list = [
     (test_7, )
 ]
 
+def test_pcl():
+    test_code_object = test_1.__code__
+    expanded_code = Code.from_code( test_code_object )
+    code_list = expanded_code.code
+    print( '========== testing printcodelist ============' )
+    printcodelist( code_list, heading='from CodeList object' )
+    printcodelist( expanded_code, heading='from Code object' )
+    printcodelist( test_code_object, heading='from code object' )
+    printcodelist( test_1, heading='from function' )
+    class P(object):
+        def __init__(self): self._p = 0
+        @property
+        def p(self): return self._p
+        @classmethod
+        def c(): return 'c'
+    printcodelist( P.p, heading='from property object' )
+    printcodelist( P.c, heading='from Method object' )
+    try:
+        printcodelist( 42, heading='not gonna happen' )
+        print( 'error in printcodelist')
+    except ValueError as v :
+        print( 'expected error from printcodelist',v )
+    except Exception as e :
+        print( 'unexpected error from printcodelist', e )
+
+def test_pav():
+    print( '============ testing print_object_attributes ========' )
+    print_object_attributes( test_6, heading='something' )
+    print( '============ testing print_attr_values ========' )
+    print_attr_values( test_6, heading=1 )
+    print_attr_values( test_6, heading='this is the heading', all=True )
+    print_attr_values( print_attr_values, heading=9, all=True )
+
 def main():
     test_a_list( case_list )
-    #print_object_attributes( test_6, heading='something' )
-    #print_attr_values( test_6, heading=1 )
-    #print_attr_values( test_6, heading='this is the heading', all=True )
-    #print_attr_values( print_attr_values, heading=9, all=True )
-    #test_code_object = test_1.__code__
-    #expanded_code = Code.from_code( test_code_object )
-    #code_list = expanded_code.code
-    #printcodelist( code_list, heading='from CodeList object' )
-    #printcodelist( expanded_code, heading='from Code object' )
-    #printcodelist( test_code_object, heading='from code object' )
-    #printcodelist( test_1, heading='from function' )
-    #try:
-        #printcodelist( 42, heading='not gonna happen' )
-        #print( 'error in printcodelist')
-    #except ValueError as v :
-        #print( 'expected error from printcodelist',v )
-    #except Exception as e :
-        #print( 'unexpected error from printcodelist', e )
-
+    test_pcl()
+    test_pav()
 
 if __name__ == '__main__':
-    main()
+    print( 'this is byteplay3 version',__version__,'a module with no command-line use' )
+    # uncomment next line to perform tests
+    #main()
