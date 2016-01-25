@@ -240,14 +240,17 @@ elif sys.version_info.minor < 4 :
 # Define some functions that are useful in exploring function objects
 # and code objects.
 #
-def object_attributes( thing ) :
+def object_attributes( thing, all=False ) :
     '''
     Return a sorted list of names defined by thing that are not also names in
     a standard object, except include __doc__.
     '''
     standard_names = set( dir( object() ) )
     things_names = set( dir( thing ) )
-    return sorted( ( things_names - standard_names ) | set( ['__doc__'] ) )
+    if not all :
+        things_names -= standard_names
+        things_names |= set( ['__doc__'] )
+    return sorted( things_names )
 
 def print_object_attributes( thing, heading=None, file=None ):
     '''
@@ -259,7 +262,8 @@ def print_object_attributes( thing, heading=None, file=None ):
 def print_attr_values( thing, all=False, heading=None, file=None ):
     '''
     Print the attributes of thing which have non-empty values,
-    as a vertical list of "name : value"
+    as a vertical list of "name : value". When all=True, print
+    all attributes even those with empty values.
     '''
     if heading :
         if isinstance( heading, int ) :
@@ -270,7 +274,7 @@ def print_attr_values( thing, all=False, heading=None, file=None ):
             )
         print( heading, file=file )
 
-    for attr in object_attributes( thing ):
+    for attr in object_attributes( thing, all ):
         attr_value = getattr( thing, attr )
         if attr_value is not None :
             print( attr, ':', attr_value, file=file )
