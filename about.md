@@ -45,11 +45,9 @@ Expect the unexpected when changing versions of Python.
 your mistakes are likely to crash the CPython interpreter.
 CPython assumes that any bytecode was produced in its `compile.c`
 module, and trusts it implicitly.
-It makes no consistency checks and does not guard against,
-for example, wrong jump offsets or table
-indexes that are out of range.
-The first sign that you produced invalid bytecode is
-likely to be a segmentation fault in Python.
+It makes no consistency checks and does not guard against
+wrong bytecode values.
+The first sign that you produced invalid bytecode may be a segmentation fault in Python.
 
 ### About Python bytecode ###
 
