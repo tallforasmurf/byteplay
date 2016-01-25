@@ -116,7 +116,7 @@ Any Python code object can be converted to a Code object,
 and the Code object converted back to a code object,
 without losing any important information on the way.
 
-#### A Quick Example ####
+### A Quick Example ###
 
 Let's start from a quick example, to give you a taste of what byteplay does.
 
@@ -199,6 +199,45 @@ Then replace the code object in function `f` with the new one.
     >>> f.__code__ = c.to_code()
     >>> f(3,5)
         5 3
+
+### Where to get a code object ###
+
+You make a Code object from a Python code object.
+As demonstrated in the example,
+the most common source of a code object is the `__code__` attribute 
+of a function object.
+Here are the main sources:
+
+* The output of the `compile()` built-in function is a code object.
+
+* Attribute `__code__` of a function object.
+
+* Attribute `__code__` of a lambda object (which is a function).
+
+* Functions accessed by way of the name of a class:
+
+	+ _classname_`.`_methodname_`.__code__`, including normal methods and methods
+	  with the `@staticmethod` decorator
+
+	+ _classname_`.`_classmethod_`.__func__.__code__` for methods declared with the
+	  `@classmethod` decorator
+
+	+ _classname_`.`_propertyname_`.fget.__code__` where _propertyname_ is declared
+	  with the `@property` decorator
+
+	+ _classname_`.`_propertyname_`.fset.__code__` where the class contains
+	  the `@`_propertyname_`.setter` decorator
+
+	+ _classname_`.`_propertyname_`.fdel.__code__` where the class contains
+	  the `@`_propertyname_`.deleter` decorator
+
+* Functions accessed by way of the name of an object, an instance of a class:
+
+	+ _objectname_`.`_methodname_`.__func__.__code__` for normal and class
+	  methods accessed through an instance of the class
+
+	+ _objectname_`.`_methodname_`.__code__` for class methods declared
+	  with `@staticmethod`, accessed through an instance of the class
 
 ## Class Opcode ##
 
@@ -503,7 +542,8 @@ Now come attributes with additional information about the code:
 
 ``name``
   A string: The name of the code, which is usually the name of the function
-  created from it.
+  created from it. Code created by the `compile()` function has the
+  name `'<module>'`.
 
 ``filename``
   A string: The name of the source file from which the bytecode was compiled.
