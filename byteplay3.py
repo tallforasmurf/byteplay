@@ -1101,29 +1101,35 @@ class Code(object):
         return flags
 
     def _compute_stacksize(self):
-        """
+        '''
         Given this object's code list, compute its maximal stack usage.
-
         This is done by scanning the code, and computing for each opcode
         the stack state at the opcode.
-        """
 
+        '''
+
+        # get local access to code, save some attribute lookups later
         code = self.code
 
         # A mapping from labels to their positions in the code list
+        label_pos = { op : pos
+                        for pos, (op, arg) in enumerate(code)
+                        if isinstance(op, Label)
+                    }
 
-        label_pos = dict( (op, pos)
-                          for pos, (op, arg) in enumerate(code)
-                          if isinstance(op, Label)
-                        )
-
-        # sf_targets are the targets of SETUP_FINALLY opcodes. They are recorded
-        # because they have special stack behaviour. If an exception was raised
-        # in the block pushed by a SETUP_FINALLY opcode, the block is popped
-        # and 3 objects are pushed. On return or continue, the block is popped
-        # and 2 objects are pushed. If nothing happened, the block is popped by
-        # a POP_BLOCK opcode and 1 object is pushed by a (LOAD_CONST, None)
-        # operation.
+        # sf_targets are the targets of SETUP_FINALLY opcodes. They are
+        # recorded because they have special stack behaviour. If an exception
+        # was raised in the block pushed by a SETUP_FINALLY opcode, the block
+        # is popped and 3 objects are pushed. On return or continue, the
+        # block is popped and 2 objects are pushed. If nothing happened, the
+        # block is popped by a POP_BLOCK opcode and 1 object is pushed by a
+        # (LOAD_CONST, None) operation.
+        #
+        # In Python 3, the targets of SETUP_WITH have similar behavior,
+        # complicated by the fact that they also have an __exit__ method
+        # stacked and what it returns determines what they pop. So their
+        # stack depth is one greater, a fact we are going to ignore for the
+        # time being :-/
         #
         # Our solution is to record the stack state of SETUP_FINALLY targets
         # as having 3 objects pushed, which is the maximum. However, to make
@@ -1133,7 +1139,7 @@ class Code(object):
 
         sf_targets = set( label_pos[arg]
                           for op, arg in code
-                          if op == SETUP_FINALLY
+                          if op == SETUP_FINALLY or op == SETUP_WITH
                         )
 
         # What we compute - for each opcode, its stack state, as an n-tuple.
@@ -1211,14 +1217,6 @@ class Code(object):
                 # CONTINUE_LOOP jumps to the beginning of a loop which should
                 # already have been discovered, but we verify anyway.
                 # It pops a block.
-                #if python_version == '2.6':
-                  #pos, stack = label_pos[arg], curstack[:-1]
-                  #if stacks[pos] != stack: #this could be a loop with a 'with' inside
-                    #yield pos, stack[:-1] + (stack[-1]-1,)
-                  #else:
-                    #yield pos, stack
-                #else:
-                  #yield label_pos[arg], curstack[:-1]
                 yield label_pos[arg], curstack[:-1]
 
             elif op == SETUP_LOOP:
@@ -1235,27 +1233,20 @@ class Code(object):
                 yield label_pos[arg], newstack(3)
                 yield pos+1, curstack + (0,)
 
-            elif op == SETUP_FINALLY:
+            elif op == SETUP_FINALLY or op == SETUP_WITH :
                 # We continue with a new block.
                 # On exception, we jump to the label with 3 extra objects on
                 # stack, but to keep stack recording consistent, we behave as
                 # if we add only 1 object. Extra 2 will be added to the actual
                 # recording.
                 yield label_pos[arg], newstack(1)
-                yield pos+1, curstack + (0,)
-
-            elif op == SETUP_WITH:
-                yield label_pos[arg], curstack
-                yield pos+1, newstack(-1) + (1,)
+                yield pos+1, curstack + ( int(op == SETUP_WITH) ,)
 
             elif op == POP_BLOCK:
                 # Just pop the block
                 yield pos+1, curstack[:-1]
 
-            elif op == END_FINALLY or op == POP_EXCEPT:
-                # Python3 has POP_EXCEPT which executes UNWIND_EXCEPT_HANDLER
-                # just as END_FINALLY does, so I have added that to this branch.
-                #
+            elif op == END_FINALLY :
                 # Since stack recording of SETUP_FINALLY targets is of 3 pushed
                 # objects (as when an exception is raised), we pop 3 objects.
                 yield pos+1, newstack(-3)
@@ -1274,9 +1265,25 @@ class Code(object):
 
         # Now comes the calculation: open_positions holds positions which are
         # yet to be explored. In each step we take one open position, and
-        # explore it by adding the positions to which you can get from it, to
+        # explore it by appending the positions to which it can go, to
         # open_positions. On the way, we update maxsize.
+        #
         # open_positions is a list of tuples: (pos, stack state)
+        #
+        # Sneaky Python coding trick here. get_next_stacks() is a generator,
+        # it contains yield statements. So when we call get_next_stacks()
+        # what is returned is an iterator. However, the yield statements in
+        # get_next_stacks() are not in a loop as usual; rather it is
+        # straight-line code that will execute 0, 1 or 2 yields depending on
+        # the Opcode at pos.
+        #
+        # the list.extend() method takes an iterator and exhausts it, adding
+        # all yielded values to the list. Hence the statement
+        #
+        #   open_positions.extend(get_next_stacks(pos,curstack))
+        #
+        # appends 0, 1 or 2 tuples (pos, stack_state) to open_positions.
+
         maxsize = 0
         open_positions = [(0, (0,))]
         while open_positions:
@@ -1502,6 +1509,7 @@ def test_a_list( func_list ) :
         try :
             mod_func = recompile( test_func )
             try :
+                test_args = func_tuple[1:] # reevaluate arg
                 mod_result = mod_func( *test_args )
             except Exception as e :
                 mod_result = e
@@ -1582,6 +1590,42 @@ def test_7( ) :
     ot7 = T7()
     return ot7.foo()
 
+def test_8( ) :
+    '''has try except, try except finally, try finally and nested try'''
+    try:
+        x = 't1'
+    except ValueError as v:
+        x = 'e1'
+    try:
+        x  = 't2'
+    except IOError as i:
+        x = 'e2'
+    finally:
+        x = 'f2'
+    try:
+        x = 't3'
+    finally:
+        x = 'f3'
+    try:
+        try:
+            x = 'tt4'
+        finally:
+            x = 'ff4'
+    except Exception as e:
+        x = 'e4'
+    finally:
+        x = 'f4'
+
+import io
+def test_9( s ):
+    '''test with statement, "s" to be any generator.
+    UNFORTUNATELY the test_a_list function has no way
+    of refreshing the generator argument between the
+    first and second calls to the function, so this
+    test fails with I/O operation on closed file. '''
+    with s :
+        return s.read(1)
+
 case_list = [
     (test_00, ),
     (test_0, ),
@@ -1592,7 +1636,9 @@ case_list = [
     (test_4, ),
     (test_5, 'a'),
     (test_6, ),
-    (test_7, )
+    (test_7, ),
+    (test_8, ),
+    (test_9, io.StringIO('x') )
 ]
 
 def test_pcl():
@@ -1630,10 +1676,11 @@ def test_pav():
 
 def main():
     test_a_list( case_list )
-    test_pcl()
-    test_pav()
+    #test_pcl()
+    #test_pav()
+    pass
 
 if __name__ == '__main__':
-    print( 'this is byteplay3 version',__version__,'a module with no command-line use' )
+    #print( 'this is byteplay3 version',__version__,'a module with no command-line use' )
     # uncomment next line to perform tests
-    #main()
+    main()
