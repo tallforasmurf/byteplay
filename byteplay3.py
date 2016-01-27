@@ -1456,14 +1456,16 @@ class Code(object):
                               co_freevars, co_cellvars)
 
 
-# END OF Byteplay external API. Following are for test only.
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+# END OF Byteplay external API. All the following are for test only.
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # Given a function, take its code object to a Code object, and back again.
 # Return a new function that uses the recompiled code object.
 
-def recompile( function ) :
+def __recompile( function ) :
     test_code_object = function.__code__
     expanded_code = Code.from_code( test_code_object )
     new_function = types.FunctionType(
@@ -1479,14 +1481,16 @@ def recompile( function ) :
 # ( func, [ arg1,...] ), a function followed by its zero or more
 # argument values.
 
-import re
-trailing_address = re.compile( '^(.*?)at 0x[0-9a-f]+>$' )
-def compare_results( a, b ):
+def __compare_results( a, b ):
+
     if a is None and b is None : return True
     if a == b : return True
     try :
         # look for '< somekinda object name at 0x0f0f0f0f0f0>'
         # and compare without the address part.
+        import re
+        trailing_address = re.compile( '^(.*?)at 0x[0-9a-f]+>$' )
+
         match_a = trailing_address.match( str( a ) )
         match_b = trailing_address.match( str( b ) )
         if match_a and match_b :
@@ -1495,7 +1499,7 @@ def compare_results( a, b ):
         pass # ignore error in str()
     return False
 
-def test_a_list( func_list ) :
+def __test_a_list( func_list ) :
 
     for func_tuple in func_list:
 
@@ -1507,13 +1511,13 @@ def test_a_list( func_list ) :
         except Exception as e :
             result = e # expected exception?
         try :
-            mod_func = recompile( test_func )
+            mod_func = __recompile( test_func )
             try :
                 test_args = func_tuple[1:] # reevaluate arg
                 mod_result = mod_func( *test_args )
             except Exception as e :
                 mod_result = e
-            if not compare_results( result, mod_result ) :
+            if not __compare_results( result, mod_result ) :
                 print( 'test ', test_func.__name__, test_args, ' failed' )
                 print( 'test result:', result )
                 print( 'recompiled result:', mod_result )
@@ -1522,124 +1526,132 @@ def test_a_list( func_list ) :
         except Exception as e :
             print( 'Recompile of ',test_func.__name__, 'failed with', e )
 
-def test_00():
-    pass
+# Compile all the little test functions and put them with their
+# test arguments in a list, and return the list. This is done inside
+# a function so that, when imported as a module, we don't waste time
+# importing datetime, asyncio, etc.
 
-def test_0():
-    ''' small test case '''
-    a = 2
-    b = a/2
-    return b
+def list_the_tests():
 
-def test_1(n):
-    ''' test case with a for-loop and some ifs '''
-    if n > 0 :
-        s = 0
-        for i in range(n) :
-            s += i
-    else :
-        s = 0
-    return s
+    def test_00():
+        pass
 
-def test_2(n):
-    ''' test case with slice notations n>=4 '''
-    lst = list( range(n) )
-    sublist = lst[0:n-2:2]
-    return sublist
+    def test_0():
+        ''' small test case '''
+        a = 2
+        b = a/2
+        return b
 
-def test_3(x) :
-    '''test case with simple closure'''
-    def shut(a):
-        return 2*a
-    return shut(x)
+    def test_1(n):
+        ''' test case with a for-loop and some ifs '''
+        if n > 0 :
+            s = 0
+            for i in range(n) :
+                s += i
+        else :
+            s = 0
+        return s
 
-def test_4() :
-    '''test of a bunch of closures from test_grammar.py
-    note this test case contains an EXTENDED_ARG opcode'''
-    closure = 1
-    def f(): return closure
-    def f(x=1): return closure
-    def f(*, k=1): return closure
-    def f() -> int: return closure
+    def test_2(n):
+        ''' test case with slice notations n>=4 '''
+        lst = list( range(n) )
+        sublist = lst[0:n-2:2]
+        return sublist
 
-def test_5( n ) :
-    '''test of a generator '''
-    yield n
+    def test_3(x) :
+        '''test case with simple closure'''
+        def shut(a):
+            return 2*a
+        return shut(x)
 
-def test_6( ) :
-    '''bunch of crazy lambdas from test_grammar.py'''
-    l1 = lambda : 0
-    assert l1() == 0
-    l2 = lambda : a[d] # XXX just testing the expression
-    l3 = lambda : [2 < x for x in [-1, 3, 0]]
-    assert l3() == [0, 1, 0]
-    l4 = lambda x = lambda y = lambda z=1 : z : y() : x()
-    assert l4() == 1
-    l5 = lambda x, y, z=2: x + y + z
-    assert l5(1, 2) == 5
-    assert l5(1, 2, 3) == 6
+    def test_4() :
+        '''test of a bunch of closures from test_grammar.py
+        note this test case contains an EXTENDED_ARG opcode'''
+        closure = 1
+        def f(): return closure
+        def f(x=1): return closure
+        def f(*, k=1): return closure
+        def f() -> int: return closure
 
-def test_7( ) :
-    '''defines a class with class variable and method'''
-    class T7:
-        t77 = 77
-        def __init__(self):
-            self.t777 = 1
-        def foo(self):
-            return T7.t77 + self.t777
-    ot7 = T7()
-    return ot7.foo()
+    def test_5( n ) :
+        '''test of a generator '''
+        yield n
 
-def test_8( ) :
-    '''has try except, try except finally, try finally and nested try'''
-    try:
-        x = 't1'
-    except ValueError as v:
-        x = 'e1'
-    try:
-        x  = 't2'
-    except IOError as i:
-        x = 'e2'
-    finally:
-        x = 'f2'
-    try:
-        x = 't3'
-    finally:
-        x = 'f3'
-    try:
+    def test_6( ) :
+        '''bunch of crazy lambdas from test_grammar.py'''
+        l1 = lambda : 0
+        assert l1() == 0
+        l2 = lambda : a[d] # XXX just testing the expression
+        l3 = lambda : [2 < x for x in [-1, 3, 0]]
+        assert l3() == [0, 1, 0]
+        l4 = lambda x = lambda y = lambda z=1 : z : y() : x()
+        assert l4() == 1
+        l5 = lambda x, y, z=2: x + y + z
+        assert l5(1, 2) == 5
+        assert l5(1, 2, 3) == 6
+
+    def test_7( ) :
+        '''defines a class with class variable and method'''
+        class T7:
+            t77 = 77
+            def __init__(self):
+                self.t777 = 1
+            def foo(self):
+                return T7.t77 + self.t777
+        ot7 = T7()
+        return ot7.foo()
+
+    def test_8( ) :
+        '''has try except, try except finally, try finally and nested try'''
         try:
-            x = 'tt4'
+            x = 't1'
+        except ValueError as v:
+            x = 'e1'
+        try:
+            x  = 't2'
+        except IOError as i:
+            x = 'e2'
         finally:
-            x = 'ff4'
-    except Exception as e:
-        x = 'e4'
-    finally:
-        x = 'f4'
+            x = 'f2'
+        try:
+            x = 't3'
+        finally:
+            x = 'f3'
+        try:
+            try:
+                x = 'tt4'
+            finally:
+                x = 'ff4'
+        except Exception as e:
+            x = 'e4'
+        finally:
+            x = 'f4'
 
-import io
-def test_9( s ):
-    '''test with statement, "s" to be any generator.
-    UNFORTUNATELY the test_a_list function has no way
-    of refreshing the generator argument between the
-    first and second calls to the function, so this
-    test fails with I/O operation on closed file. '''
-    with s :
-        return s.read(1)
+    import io
+    def test_9( s ):
+        '''test with statement, "s" to be any generator.
+        UNFORTUNATELY the __test_a_list function has no way
+        of refreshing the generator argument between the
+        first and second calls to the function, so this
+        test fails with I/O operation on closed file. '''
+        with s :
+            return s.read(1)
 
-case_list = [
-    (test_00, ),
-    (test_0, ),
-    (test_1, 5),
-    (test_1, -1),
-    (test_2, 8),
-    (test_3, 5),
-    (test_4, ),
-    (test_5, 'a'),
-    (test_6, ),
-    (test_7, ),
-    (test_8, ),
-    (test_9, io.StringIO('x') )
-]
+    case_list = [
+        (test_00, ),
+        (test_0, ),
+        (test_1, 5),
+        (test_1, -1),
+        (test_2, 8),
+        (test_3, 5),
+        (test_4, ),
+        (test_5, 'a'),
+        (test_6, ),
+        (test_7, ),
+        (test_8, ),
+        (test_9, io.StringIO('x') )
+    ]
+    return case_list
 
 def test_pcl():
     test_code_object = test_1.__code__
@@ -1675,7 +1687,7 @@ def test_pav():
     print_attr_values( print_attr_values, heading=9, all=True )
 
 def main():
-    test_a_list( case_list )
+    __test_a_list( list_the_tests() )
     #test_pcl()
     #test_pav()
     pass
