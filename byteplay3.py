@@ -1637,6 +1637,18 @@ def list_the_tests():
         with s :
             return s.read(1)
 
+    def test_10():
+        import asyncio
+        import datetime
+        def hello_world(loop):
+            print('hello from an async callback')
+            loop.stop()
+        loop = asyncio.new_event_loop()
+        loop.call_soon(hello_world, loop)
+        loop.run_forever()
+        loop.close()
+        return loop.is_closed()
+
     case_list = [
         (test_00, ),
         (test_0, ),
@@ -1649,7 +1661,8 @@ def list_the_tests():
         (test_6, ),
         (test_7, ),
         (test_8, ),
-        (test_9, io.StringIO('x') )
+        (test_9, io.StringIO('x') ),
+        (test_10, )
     ]
     return case_list
 
