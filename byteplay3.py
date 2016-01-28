@@ -48,7 +48,7 @@ The following names are available from the module:
             the COMPARE_OP bytecode. From the standard module "opcode".
 
         SetLineno
-            Global var holding the single object of the SetLinenoType
+            Global var holding an instance of the SetLinenoType
             class. (SetLineno, line_number) in a CodeList marks the
             beginning of code from source line_number. These tuples are
             converted into the co_lnotab array in to_code().
@@ -513,7 +513,7 @@ normal list behavior is the __str__() function.
         for i, ( op, arg ) in enumerate( self ):
             if isinstance(op, Label):
                 pendinglabels.append( op )
-            elif op is SetLineno:
+            elif isinstance( op, SetLinenoType ):
                 pass
             else:
                 while pendinglabels:
@@ -522,7 +522,7 @@ normal list behavior is the __str__() function.
         lineno = None
         islabel = False
         for i, ( op, arg ) in enumerate( self ):
-            if op is SetLineno:
+            if isinstance( op, SetLinenoType ):
                 # This code item is a marker of a source line number, which is
                 # not a bytecode. Set up so that the NEXT opcode will display the
                 # line number in the left margin. Output a blank line here.
@@ -668,7 +668,7 @@ def isopcode(obj):
     """
     Return whether obj is an opcode - not SetLineno or Label
     """
-    return not isinstance(obj,SetLinenoType) and not isinstance(obj, Label)
+    return not isinstance(obj, SetLinenoType) and not isinstance(obj, Label)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
@@ -1355,7 +1355,7 @@ class Code(object):
             if isinstance(op, Label):
                 label_pos[op] = len(co_code)
 
-            elif op is SetLineno:
+            elif isinstance( op, SetLinenoType ) :
                 incr_lineno = arg - lastlineno
                 incr_pos = len(co_code) - lastlinepos
                 lastlineno = arg
