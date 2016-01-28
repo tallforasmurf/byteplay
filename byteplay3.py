@@ -1209,15 +1209,18 @@ class Code(object):
                 yield pos+1, newstack(1)
 
             elif op == BREAK_LOOP:
-                # BREAK_LOOP jumps to a place specified on block creation, so
-                # it is ignored here
+                # BREAK_LOOP goes to the end of a loop and pops a block
+                # but like RETURN_VALUE we have no instruction position
+                # to give. For now treat like RETURN_VALUE
                 pass
 
             elif op == CONTINUE_LOOP:
                 # CONTINUE_LOOP jumps to the beginning of a loop which should
-                # already have been discovered, but we verify anyway.
-                # It pops a block.
-                yield label_pos[arg], curstack[:-1]
+                # already have been discovered. It does not change the stack
+                # state nor does it create or pop a block.
+                #yield label_pos[arg], curstack
+                #yield label_pos[arg], curstack[:-1]
+                pass
 
             elif op == SETUP_LOOP:
                 # We continue with a new block.
