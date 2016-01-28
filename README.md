@@ -18,6 +18,14 @@ https://github.com/tallforasmurf/byteplay/blob/master/about.md
 
 **At this time byteplay3 is a work in progress**.
 
+## Why Version 3.5.x?
+
+I am setting the version number of byteplay3 to be the same as the
+highest level of Python against which it has been tested,
+plus a minor change number.
+Thus the current `__version__` string is `"3.5.0"`,
+first release tested on Python 3.5.
+
 ## Why this fork?
 
 I (tallforasmurf) would like to play with byteplay on Python 3,
