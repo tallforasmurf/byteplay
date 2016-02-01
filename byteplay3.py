@@ -333,6 +333,13 @@ for name, code in opmap.items():
     globals()[name] = code
     __all__.append(name)
 
+# Resolve the difference between Python 3.4 and 3.5 to a single name.
+# Note this name is not exported in __all__. Solve your own version diffs!
+if sys.version_info.minor == 4 :
+    _WITH_CLEANUP_OPCODE = WITH_CLEANUP
+else :
+    _WITH_CLEANUP_OPCODE = WITH_CLEANUP_START
+
 # Add opcode.cmp_op to our API (the name "cmp_op" is in __all__ already). It
 # is a tuple of the Python comparison operator names such as "<=" and "is
 # not". These are the strings that can appear as the argument value of the
@@ -1254,8 +1261,8 @@ class Code(object):
                 # objects (as when an exception is raised), we pop 3 objects.
                 yield pos+1, newstack(-3)
 
-            elif op == WITH_CLEANUP:
-                # Since WITH_CLEANUP is always found after SETUP_FINALLY
+            elif op == _WITH_CLEANUP_OPCODE:
+                # Since WITH_CLEANUP[_START] is always found after SETUP_FINALLY
                 # targets, and the stack recording is that of a raised
                 # exception, we can simply pop 1 object and let END_FINALLY
                 # pop the remaining 3.
@@ -1710,5 +1717,6 @@ def main():
 
 if __name__ == '__main__':
     #print( 'this is byteplay3 version',__version__,'a module with no command-line use' )
-    # uncomment next line to perform tests
+    # uncomment next lines to perform tests
+    print( 'running under Python', sys.version[:6] )
     main()
