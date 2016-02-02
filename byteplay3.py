@@ -1000,8 +1000,8 @@ class Code(object):
 
         # Get the names of arguments as strings, from the varnames tuple. The
         # order of name strings in co_varnames is:
-        #   names of regular (positional-or-keyword) arguments
-        #   names of keyword-only arguments if any
+        #   co_argcount names of regular (positional-or-keyword) arguments
+        #   names of co_kwonlyargcount keyword-only arguments if any
         #   name of a *vararg argument
         #   name of a **kwarg argument if any (not present if kwonlyargs > 0)
         #   names of other local variables
@@ -1307,7 +1307,7 @@ class Code(object):
         """
         Assemble a Python code object from this Code object.
         """
-        co_argcount = len(self.args) - self.varargs - self.varkwargs
+        co_argcount = len(self.args) - self.varargs - self.varkwargs - self.kwonlyargcount
         co_kwonlyargcount = self.kwonlyargcount
         co_stacksize = self._compute_stacksize()
         co_flags = self._compute_flags()
@@ -1476,15 +1476,12 @@ class Code(object):
 # Return a new function that uses the recompiled code object.
 
 def __recompile( function ) :
+    import copy
     test_code_object = function.__code__
     expanded_code = Code.from_code( test_code_object )
-    new_function = types.FunctionType(
-        code = expanded_code.to_code(),
-        globals = function.__globals__,
-        name = function.__name__,
-        argdefs = function.__defaults__,
-        closure = function.__closure__
-        )
+    recompiled_code = expanded_code.to_code()
+    new_function = copy.copy( function )
+    new_function.__code__ = recompiled_code
     return new_function
 
 # Iterate through a list of tests. Each item in the list is a tuple,
@@ -1523,7 +1520,6 @@ def __test_a_list( func_list ) :
         try :
             mod_func = __recompile( test_func )
             try :
-                test_args = func_tuple[1:] # reevaluate arg
                 mod_result = mod_func( *test_args )
             except Exception as e :
                 mod_result = e
@@ -1531,6 +1527,8 @@ def __test_a_list( func_list ) :
                 print( 'test ', test_func.__name__, test_args, ' failed' )
                 print( 'test result:', result )
                 print( 'recompiled result:', mod_result )
+                print_attr_values( test_func.__code__, heading='Test function code' )
+                print_attr_values( mod_func.__code__, heading='Recompiled code' )
             else :
                 print( test_func.__name__, test_args )
         except Exception as e :
@@ -1659,6 +1657,10 @@ def list_the_tests():
         loop.close()
         return loop.is_closed()
 
+    def test_sig1( a, *args, z=1 ):
+        ''' test of handling of *args and kwonlyargcount '''
+        return z + len( [*args] )
+
     case_list = [
         (test_00, ),
         (test_0, ),
@@ -1671,8 +1673,9 @@ def list_the_tests():
         (test_6, ),
         (test_7, ),
         (test_8, ),
-        (test_9, io.StringIO('x') ),
-        (test_10, )
+        (test_9, io.StringIO('xx') ),
+        (test_10, ),
+        (test_sig1, 'a', 1 )
     ]
     return case_list
 
@@ -1716,7 +1719,8 @@ def main():
     pass
 
 if __name__ == '__main__':
-    #print( 'this is byteplay3 version',__version__,'a module with no command-line use' )
+    pass
+    print( 'this is byteplay3 version',__version__,'a module with no command-line use' )
     # uncomment next lines to perform tests
-    print( 'running under Python', sys.version[:6] )
-    main()
+    #print( 'running under Python', sys.version[:6] )
+    #main()
