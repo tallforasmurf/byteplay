@@ -95,10 +95,10 @@ To learn more about bytecodes, consult one of these sources:
   [tour of bytecode execution](http://tech.blog.aknin.name/2010/04/02/pythons-innards-introduction)
   is especially good on the contents of a code object.
 
-* In the CPython source distro, see the files `Doc/library/dis.rst` and
-  `Doc/library/inspect.rst`.
-  In your installed Python, read the `opcode.py`, `dis.py` and `inspect.py` modules 
-  themselves.
+* Read the documentation for the standard modules `dis`, `inspect`, and `opcode`
+  (easily found at https://docs.python.org/3.5/py-modindex.html).
+  In your installed Python, read the source of the `opcode.py`,
+  `dis.py` and `inspect.py` modules themselves.
 
 ### The Code and CodeList classes ###
 
