@@ -876,6 +876,11 @@ class Code(object):
         This is the expected way to make a Code instance. But you are welcome
         to call Code() directly if you wish.
         """
+        # It's an annoyance to keep having to add ".__code__" to a function
+        # name, so let's automate that when needed.
+        if isinstance( code_object, types.FunctionType ) :
+            code_object = code_object.__code__
+
         # get the actual bytecode string out of the code object
         co_code = code_object.co_code
 
