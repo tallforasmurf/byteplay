@@ -95,12 +95,13 @@ To learn more about bytecodes, consult one of these sources:
   [tour of bytecode execution](http://tech.blog.aknin.name/2010/04/02/pythons-innards-introduction)
   is especially good on the contents of a code object.
 
+
 * Read the documentation for the standard modules `dis`, `inspect`, and `opcode`
   (easily found at https://docs.python.org/3.5/py-modindex.html).
   In your installed Python, read the source of the `opcode.py`,
   `dis.py` and `inspect.py` modules themselves.
 
-### The Code and CodeList classes ###
+## The Code and CodeList classes ##
 
 byteplay3 defines a class named Code.
 A Code object is created from a Python code object,
@@ -237,7 +238,7 @@ Here are the main sources:
 	+ _objectname_`.`_methodname_`.__code__` for class methods declared
 	  with `@staticmethod`, accessed through an instance of the class
 
-## Class Opcode ##
+### Class Opcode ###
 
 We have seen that the code list contains opcode constants such as LOAD\_FAST.
 These are instances of the Opcode class.
@@ -288,6 +289,48 @@ bits as argument.
 When byteplay3 converts a code object to a Code object,
 it combines the bits into a single argument value and discards the EXTENDED\_ARG.
 When converting back to raw bytecode it inserts EXTENDED\_ARG codes as needed.
+
+## Included Examples ##
+
+In the `examples` folder
+(https://github.com/tallforasmurf/byteplay/tree/master/examples) look for
+the following.
+
+### make_constants ###
+
+The module `make_constants.py` provides an example of using byteplay3 to
+perform code optimizations on Python functions.
+The central function is `_make_constants` which takes a function object
+and returns a replacement function with code that may have been modified.
+
+This function performs two optimizations.
+First, is passes over the bytecode looking for `LOAD_GLOBAL` opcodes.
+It finds the current value of the named global, and changes the opcode
+into a `LOAD_CONST` of that value.
+This saves a global name lookup at execution time.
+This pass uses `enumerate` to examine each opcode in turn.
+When it replaces a single opcode it can use the index to update
+that item in the codelist.
+
+Then it again scans the bytecode looking for one or more `LOAD_CONST`
+opcodes followed by one of `BUILD_TUPLE`, `BUILD_LIST`, or `BUILD_SET`.
+It "folds" the loaded constant values into a single tuple, list or set
+and replaces the sequence with a single `LOAD_CONST` of that value.
+
+The second pass uses a different approach to scanning the code list.
+It appends each instruction to an output list.
+The end elements of the list are the opcodes most recently scanned.
+When it needs to replace a sequence, it can delete the trailing items
+in the list and append a new single item.
+
+The `_make_constants` function is designed to be used as a decorator.
+Use `from make_constants import *` and then prefix any function to be
+optimized with the decorator `@make_constants`.
+
+In addition the module contains a function `bind_all` that accepts
+either a module or a class definition, and applies `_make_constants`
+to all the function members of that class or module.
+
 
 ## The byteplay3 API ##
 
@@ -425,9 +468,9 @@ These functions are available for general use.
   `== all attributes of thing-name ==`.
   Output is to the given file object or to stdout.
 
-## The Code Class ##
+### The Code Class ###
 
-### Constructor ###
+#### Constructor ####
 
 The Code object represents the contents of a Python code object.
 The docstring of a code object (as you can verify with `print_attr_values()`)
@@ -568,7 +611,7 @@ Now come attributes with additional information about the code:
   A string: The docstring for functions created from this code.
 
 
-### Methods ###
+#### Methods ####
 
 These are the Code class methods.
 
