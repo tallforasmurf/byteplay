@@ -304,7 +304,7 @@ The central function is `_make_constants` which takes a function object
 and returns a replacement function with code that may have been modified.
 
 This function performs two optimizations.
-First, is passes over the bytecode looking for `LOAD_GLOBAL` opcodes.
+First, it passes over the bytecode looking for `LOAD_GLOBAL` opcodes.
 It finds the current value of the named global, and changes the opcode
 into a `LOAD_CONST` of that value.
 This saves a global name lookup at execution time.
@@ -312,7 +312,7 @@ This pass uses `enumerate` to examine each opcode in turn.
 When it replaces a single opcode it can use the index to update
 that item in the codelist.
 
-Then it again scans the bytecode looking for one or more `LOAD_CONST`
+Then it again scans the bytecode looking for a sequence of one or more `LOAD_CONST`
 opcodes followed by one of `BUILD_TUPLE`, `BUILD_LIST`, or `BUILD_SET`.
 It "folds" the loaded constant values into a single tuple, list or set
 and replaces the sequence with a single `LOAD_CONST` of that value.
