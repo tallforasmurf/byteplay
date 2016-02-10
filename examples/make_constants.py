@@ -44,6 +44,45 @@ Arguments to @make_constants are:
 
 '''
 
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+#
+# Establish version and other import dunder-constants.
+
+__license__ = '''
+                 License (GPL-3.0) :
+    This file is part of the byteplay module.
+    byteplay is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This module is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You can find a copy of the GNU General Public License in the file
+    COPYING.TXT included in the distribution of this module, or see:
+    <http://www.gnu.org/licenses/>.
+'''
+__version__ = "3.5.0"
+__author__  = "Raymond Hettinger (original concept); Noam Yorav-Raphael (byteplay version); David Cortesi (byteplay3)"
+__copyright__ = "Copyright (C) 2006-2010 Noam Yorav-Raphael; this version (C) 2016 David Cortesi"
+__maintainer__ = "David Cortesi"
+__email__ = "davecortesi@gmail.com"
+
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+#
+# The __all__ global establishes the complete API of the module on import.
+# "from byteplay import *" imports these names, plus a bunch of names of
+# opcodes. Although this form of import is usually deprecated, it makes
+# sense in this case because code that uses byteplay almost always needs
+# access to the set of opcode names.
+#
+
+__all__ = ['_make_constants', 'bind_all', 'make_constants' ]
+
 from byteplay3 import *
 
 # This function implements a decorator; as such it takes a function
