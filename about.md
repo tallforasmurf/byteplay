@@ -312,6 +312,12 @@ This pass uses `enumerate` to examine each opcode in turn.
 When it replaces a single opcode it can use the index to update
 that item in the codelist.
 
+**Caution!** This optimization assumes that no global value will be
+modified at run time. If any global value might take on a different
+value during execution, you should pass the `builtin_only=True` argument.
+In the unlikely case that your code alters the value of a *built-in*
+method at run-time, you should not apply `make_constants` at all.
+
 Then it again scans the bytecode looking for a sequence of one or more `LOAD_CONST`
 opcodes followed by one of `BUILD_TUPLE`, `BUILD_LIST`, or `BUILD_SET`.
 It "folds" the loaded constant values into a single tuple, list or set
