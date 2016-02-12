@@ -150,11 +150,9 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
                     print( name, '-->', value )
 
     # Pass Two: again scan the list of instructions looking for the sequence
-    # LOAD_CONST, LOAD_CONST,... BUILD_TUPLE/LIST/SET. Create an actual tuple
-    # list or set of the referenced constant values, and replace the sequence
-    # with a single LOAD_CONST.
-
-    build_tls = set( [ BUILD_TUPLE, BUILD_LIST, BUILD_SET ] )
+    # LOAD_CONST, LOAD_CONST,... BUILD_TUPLE. Create an actual tuple of the
+    # referenced constant values, and replace the sequence with a single
+    # LOAD_CONST.
 
     # We will build up a copy of the existing bytecode sequence in
     # newcode, possibly modifying it as we go.
@@ -173,9 +171,9 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
             # such as occurs with a lambda or internal def)
             constcount += 1
 
-        elif op in build_tls and arg and constcount >= arg:
+        elif op == BUILD_TUPLE and arg and constcount >= arg:
 
-            # BUILD_* expects to pop "arg" values from the stack, and
+            # BUILD_TUPLE expects to pop "arg" values from the stack, and
             # we have seen at least that many const's pushed. So we
             # can fold those constants into a new tuple/list/set.
             #
@@ -184,28 +182,24 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
             # order stacked, so when the user writes (1,2) she gets (1,2).
 
             newconst = tuple( x[1] for x in newcode[-arg:] )
-            if op == BUILD_LIST :
-                newconst = list( newconst )
-            elif op == BUILD_SET :
-                newconst = set( newconst )
 
             # At this point the last "arg" tuples in newcode are the
-            # LOAD_CONSTs (this BUILD_* has not been added). Clear only
-            # the used opcodes from newcode and from the count. This allows
-            # for an expression like ( 1, [2,3] ) implemented as LOAD_CONST,
-            # LOAD_CONST, LOAD_CONST, BUILD_SET 2, BUILD_TUPLE 2.
+            # LOAD_CONSTs (the current BUILD_TUPLE has not been added). Clear
+            # only the used opcodes from newcode and from the count. This
+            # allows for an expression like ( 1, (2,3) ) implemented as
+            # LOAD_CONST, LOAD_CONST, LOAD_CONST, BUILD_TUPLE 2, BUILD_TUPLE 2.
 
             del newcode[-arg:]
             constcount -= arg
 
         else:
-            # Not a LOAD_CONST (nor a BUILD_* with a nonzero arg),
+            # Not a LOAD_CONST nor BUILD_TUPLE with a nonzero arg,
             # so reset the count of sequential LOAD_CONST opcodes
             # at the end of newcode. Start looking for a new sequence.
             constcount = 0
 
         if newconst is not SENTINEL:
-            # We are processing a BUILD_* following LOAD_CONST's.
+            # We are processing a BUILD_TUPLE following LOAD_CONST's.
             # newconst has the composite tuple value and the old LOAD_CONST's
             # have been deleted.
 
@@ -214,12 +208,10 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
             # So that is a LOAD_CONST so count it.
             constcount += 1
             if verbose:
-                if len( newconst ) :
-                    print( "new folded constant:", newconst )
-                else :
-                    print( newconst, "converted to constant" )
+                print( "new folded constant:", newconst )
+
         else:
-            # Not processing a BUILD_*, just save this opcode,
+            # Not processing a BUILD_TUPLE so just save this opcode,
             # whatever it was.
             newcode.append((op, arg))
 
