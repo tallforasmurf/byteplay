@@ -114,6 +114,8 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
     except AttributeError:
         # Apparently f is not a CPython function...
         return f # ..return it unchanged
+    if verbose :
+        print( 'make_constants on', f.__name__ )
 
     # Convert the Python code object to a byteplay3 Code object.
     co = Code.from_code(co)
@@ -152,7 +154,7 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
     # list or set of the referenced constant values, and replace the sequence
     # with a single LOAD_CONST.
 
-    builders = set( [ BUILD_TUPLE, BUILD_SET, BUILD_LIST ] )
+    build_tls = set( [ BUILD_TUPLE, BUILD_LIST, BUILD_SET ] )
 
     # We will build up a copy of the existing bytecode sequence in
     # newcode, possibly modifying it as we go.
@@ -165,11 +167,13 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
 
     for op, arg in co.code:
         newconst = SENTINEL
-        if op == LOAD_CONST:
-            # count the n'th of a sequence of LOAD_CONSTs
+        if op == LOAD_CONST and type(arg) != type(co) :
+            # count the n'th of a sequence of LOAD_CONSTs (but
+            # do not handle a LOAD_CONST of an embedded Code object,
+            # such as occurs with a lambda or internal def)
             constcount += 1
 
-        elif op in builders and arg and constcount >= arg:
+        elif op in build_tls and arg and constcount >= arg:
 
             # BUILD_* expects to pop "arg" values from the stack, and
             # we have seen at least that many const's pushed. So we
@@ -210,7 +214,10 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
             # So that is a LOAD_CONST so count it.
             constcount += 1
             if verbose:
-                print( "new folded constant:", newconst )
+                if len( newconst ) :
+                    print( "new folded constant:", newconst )
+                else :
+                    print( newconst, "converted to constant" )
         else:
             # Not processing a BUILD_*, just save this opcode,
             # whatever it was.
@@ -340,3 +347,8 @@ def make_constants(builtin_only=False, stoplist=[], verbose=False):
 #GLOBALX --> 1
 #new folded constant: [3, 1]
 #'''
+#@make_constants(verbose=True)
+#def test_nulls():
+    #nullist = []
+    #nulltup = ()
+    #bubbles = ( (), [], [ (), () ] )
