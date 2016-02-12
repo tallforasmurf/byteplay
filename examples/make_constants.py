@@ -300,22 +300,15 @@ def make_constants(builtin_only=False, stoplist=[], verbose=False):
 #GLOBALZ = 3
 #def test_builds():
     #t = ( GLOBALX, GLOBALY, GLOBALZ )
-    #l = [ GLOBALX, GLOBALY, GLOBALZ ]
-    #s = { GLOBALX, GLOBALY, GLOBALZ }
-    #q = ( GLOBALX, [GLOBALY, GLOBALZ], { GLOBALX, GLOBALZ } )
+    #q = ( GLOBALX, (GLOBALY, GLOBALZ), (GLOBALX, GLOBALZ) )
     #return q[1][1]
-#print( Code.from_code( test_builds ).code )
-#t2 = _make_constants( test_builds, verbose=True )
-#print( Code.from_code( t2 ).code )
-#assert 3 == t2()
+#assert 3 == test_builds()
 #class test_class(object):
     #class_const = 99
     #def __init__(self):
-        #self.meth_l()
         #self.meth_t()
     #def meth_t(self):
         #self.t = (GLOBALX,GLOBALY)
-    #def meth_l(self):
         #self.l = [GLOBALZ,GLOBALX]
     #def meth_z(self):
         #self.t = (test_class.class_const, GLOBALX)
@@ -324,21 +317,6 @@ def make_constants(builtin_only=False, stoplist=[], verbose=False):
         #x = (GLOBALY,cls.class_const)
 
 #bind_all( test_class, verbose=True )
-#'''
-#Output of bind_all should be,
-#make_constants( __init__ )
-#make_constants( meth_z )
-#test_class --> <class '__main__.test_class'>
-#GLOBALX --> 1
-#make_constants( meth_t )
-#GLOBALX --> 1
-#GLOBALY --> 2
-#new folded constant: (1, 2)
-#make_constants( meth_l )
-#GLOBALZ --> 3
-#GLOBALX --> 1
-#new folded constant: [3, 1]
-#'''
 #@make_constants(verbose=True)
 #def test_nulls():
     #nullist = []
