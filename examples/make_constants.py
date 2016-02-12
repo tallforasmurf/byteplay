@@ -75,15 +75,35 @@ __email__ = "davecortesi@gmail.com"
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # The __all__ global establishes the complete API of the module on import.
-# "from byteplay import *" imports these names, plus a bunch of names of
-# opcodes. Although this form of import is usually deprecated, it makes
-# sense in this case because code that uses byteplay almost always needs
-# access to the set of opcode names.
 #
 
 __all__ = ['_make_constants', 'bind_all', 'make_constants' ]
 
 from byteplay3 import *
+import types
+import builtins
+
+def _func_copy(f, newcode) :
+    '''
+    Return a copy of function f with a different __code__
+    Because I can't find proper documentation on the
+    correct signature of the types.FunctionType() constructor,
+    I pass the minimum arguments then set the important
+    dunder-values by direct assignment.
+
+    Note you cannot assign __closure__, it is a "read-only attribute".
+    Ergo, you should not apply _make_constants() to a function that
+    has a closure!
+    '''
+    newf = types.FunctionType( newcode, f.__globals__ )
+    newf.__annotations__ = f.__annotations__
+    # newf.__closure__ = f.__closure__
+    newf.__defaults__ = f.__defaults__
+    newf.__doc__ = f.__doc__
+    newf.__name__ = f.__name__
+    newf.__kwdefaults__ = f.__kwdefaults__
+    newf.__qualname__ = f.__qualname__
+    return newf
 
 # This function implements a decorator; as such it takes a function
 # object as its first argument and returns a replacement for it.
@@ -128,17 +148,17 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
                     print( name, '-->', value )
 
     # Pass Two: again scan the list of instructions looking for the sequence
-    # LOAD_CONST, LOAD_CONST,... BUILD_TUPLE/LIST/Set. Create an actual tuple
+    # LOAD_CONST, LOAD_CONST,... BUILD_TUPLE/LIST/SET. Create an actual tuple
     # list or set of the referenced constant values, and replace the sequence
     # with a single LOAD_CONST.
 
     builders = set( [ BUILD_TUPLE, BUILD_SET, BUILD_LIST ] )
 
-    # We will build up a duplicate of the existing bytecode sequence in
+    # We will build up a copy of the existing bytecode sequence in
     # newcode, possibly modifying it as we go.
     newcode = []
 
-    constcount = 0 # number of sequential LOAD_CONST's seen so far.
+    constcount = 0 # number of sequential LOAD_CONST's at the end of newcode.
     SENTINEL = [] # An object that won't appear anywhere else
 
     # The following loop iterates once per (Opcode, arg) in the code.
@@ -149,7 +169,7 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
             # count the n'th of a sequence of LOAD_CONSTs
             constcount += 1
 
-        elif op in builders and constcount >= arg:
+        elif op in builders and arg and constcount >= arg:
 
             # BUILD_* expects to pop "arg" values from the stack, and
             # we have seen at least that many const's pushed. So we
@@ -175,12 +195,13 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
             constcount -= arg
 
         else:
-            # Not a LOAD_CONST, so reset the count of sequential
-            # LOAD_CONST opcodes
+            # Not a LOAD_CONST (nor a BUILD_* with a nonzero arg),
+            # so reset the count of sequential LOAD_CONST opcodes
+            # at the end of newcode. Start looking for a new sequence.
             constcount = 0
 
         if newconst is not SENTINEL:
-            # We are processing a BUILD_TUPLE following LOAD_CONST's.
+            # We are processing a BUILD_* following LOAD_CONST's.
             # newconst has the composite tuple value and the old LOAD_CONST's
             # have been deleted.
 
@@ -191,7 +212,8 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
             if verbose:
                 print( "new folded constant:", newconst )
         else:
-            # Not processing a BUILD_TUPLE, just save this opcode.
+            # Not processing a BUILD_*, just save this opcode,
+            # whatever it was.
             newcode.append((op, arg))
 
     # We have copied and possibly modified the code; put it back in the
@@ -200,16 +222,11 @@ def _make_constants(f, builtin_only=False, stoplist=[], verbose=False):
     co.code = newcode
 
     # Return a new function object just like the input function object, but
-    # with new bytecode. Instead of trying to invoke the types.FunctionType()
-    # constructor with all the needed arguments (e.g. f.__globals__,
-    # f.__closure__ and so forth) we will let the copy.copy() function do it
-    # for us. That way we know it's done right.
-    import copy
-    newfun = copy.copy( f )
-    newfun.__code__ = co.to_code()
+    # with new bytecode.
+    newfun = _func_copy( f, co.to_code() )
     return newfun
 
-# TODO _make_constants = _make_constants(_make_constants) # optimize thyself!
+_make_constants = _make_constants(_make_constants) # optimize thyself!
 
 def bind_all(mc, builtin_only=False, stoplist=[],  verbose=False):
     """Recursively apply constant binding to functions in a module or class.
@@ -249,7 +266,6 @@ def make_constants(builtin_only=False, stoplist=[], verbose=False):
 #
 
 #import random
-
 #@make_constants(verbose=True)
 #def sample(population, k):
     #"Choose k unique random elements from a population sequence."
@@ -290,7 +306,7 @@ def make_constants(builtin_only=False, stoplist=[], verbose=False):
     #q = ( GLOBALX, [GLOBALY, GLOBALZ], { GLOBALX, GLOBALZ } )
     #return q[1][1]
 #print( Code.from_code( test_builds ).code )
-#t2 = _make_constants( test_builds )
+#t2 = _make_constants( test_builds, verbose=True )
 #print( Code.from_code( t2 ).code )
 #assert 3 == t2()
 #class test_class(object):
