@@ -24,8 +24,7 @@ The inspiration for this code was a recipe by Raymond Hettinger in the Python
 Cookbook, (aspn.activestate.com/ASPN/Cookbook/Python/Recipe/277940).
 It was modified by Noam Raphael to demonstrate using the byteplay module and
 distributed with byteplay. This version is further modified to work with
-Python 3 and byteplay3, and adding BUILD_LIST and BUILD_SET support. And a
-ton of gratuitous comments.
+Python 3 and byteplay3, and a ton of gratuitous comments.
 
 Arguments to @make_constants are:
 
