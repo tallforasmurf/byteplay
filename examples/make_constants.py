@@ -12,13 +12,11 @@ execution.
 Second, if the code now contains any of the sequences
 
   LOAD_CONST LOAD_CONST* BUILD_TUPLE n
-  LOAD_CONST LOAD_CONST* BUILD_LIST n
-  LOAD_CONST LOAD_CONST* BUILD_SET n
 
 (the LOAD_CONST's might well result from the first phase) the most recent
-sequence of n constant values is made into a tuple, list or set which is
-added to the constant list, and the n LOAD_CONST bytecodes are reduced to a
-single LOAD_CONST of the folded tuple, list or set.
+sequence of n constant values is made into a tuple which is added to the
+constant list, and the n LOAD_CONST bytecodes are reduced to a single
+LOAD_CONST of the folded tuple, list or set.
 
 The inspiration for this code was a recipe by Raymond Hettinger in the Python
 Cookbook, (aspn.activestate.com/ASPN/Cookbook/Python/Recipe/277940).
