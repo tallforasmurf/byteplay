@@ -319,9 +319,13 @@ In the unlikely case that your code alters the value of a *built-in*
 method at run-time, you should not apply `make_constants` at all.
 
 Then it again scans the bytecode looking for a sequence of one or more `LOAD_CONST`
-opcodes followed by one of `BUILD_TUPLE`, `BUILD_LIST`, or `BUILD_SET`.
-It "folds" the loaded constant values into a single tuple, list or set
+opcodes followed by `BUILD_TUPLE`.
+It "folds" the loaded constant values into a single tuple
 and replaces the sequence with a single `LOAD_CONST` of that value.
+(It might occur to you that there also exists `BUILD_LIST` and `BUILD_SET`
+opcodes with similar semantics to `BUILD_TUPLE`. There is one critical
+difference, though, that makes these ineligible for this optimization.
+Can you think what it is?)
 
 The second pass uses a different approach to scanning the code list.
 It appends each instruction to an output list.
