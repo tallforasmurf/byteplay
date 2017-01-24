@@ -23,8 +23,8 @@ It returns a generator that yields a `dis.Instruction` object
 for each bytecode instruction in sequence, with copious
 information about that instruction.
 
-This standard module feature basically duplicates and supercedes byteplay3
-for purposes of bytecode display and study, and can be expected to be
+This standard module feature basically **duplicates and supercedes byteplay3**
+for purposes of **bytecode display and study**, and can be expected to be
 maintained promptly and correctly with each new version.
 
 **Caution**: The bytecodes defined by the CPython interpreter
@@ -47,7 +47,7 @@ CPython assumes that any bytecode was produced in its `compile.c`
 module, and trusts it implicitly.
 It makes no consistency checks and does not guard against
 wrong bytecode values.
-The first sign that you produced invalid bytecode may be a segmentation fault in Python.
+Thus the first sign that you produced invalid bytecode may be a segmentation fault in Python.
 
 ### About Python bytecode ###
 
