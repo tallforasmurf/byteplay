@@ -7,9 +7,11 @@
 ## Stop! Changes!
 
 As of Python 3.6, the format of bytecode has changed from 1-3 bytes, to all 16-bit words. 
+Also, several new opcodes have been added.
+(Documented: https://docs.python.org/3/whatsnew/3.6.html#cpython-bytecode-changes)
 
-This pretty thoroughly invalidates the assembly features of byteplay!
-It could be fixed, no doubt, but I don't the inclination to do it.
+These changes pretty thoroughly invalidate most features of byteplay!
+It could be fixed, no doubt, but I don't have the inclination to do it.
 If you do, feel free to submit a pull request, or to clone this repo and do a new version.
 
 In the meantime, all the following text and the rest of the files are of historical interest only!
